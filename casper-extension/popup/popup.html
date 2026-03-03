@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CASPER Password Manager</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup" id="popup">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="icon">🔐</span>
+        <h1>CASPER</h1>
+      </div>
+      <div class="status" id="status">
+        <span class="lock-icon" id="lockIcon">🔒</span>
+        <span class="status-text" id="statusText">Locked</span>
+      </div>
+    </div>
+
+    <!-- Breach Alert -->
+    <div class="breach-alert" id="breachAlert" style="display: none;">
+      <span class="alert-icon">🚨</span>
+      <span class="alert-text">BREACH DETECTED!</span>
+      <button class="alert-close" id="closeAlert">×</button>
+    </div>
+
+    <!-- Setup Screen -->
+    <div class="screen" id="setupScreen" style="display: none;">
+      <div class="setup-content">
+        <h2>Welcome to CASPER</h2>
+        <p>Create your secure vault with a PIN</p>
+        
+        <div class="input-group">
+          <label for="setupPin">Master PIN (4-6 digits)</label>
+          <input type="password" id="setupPin" placeholder="Enter PIN" maxlength="6" pattern="[0-9]*">
+        </div>
+        
+        <div class="input-group">
+          <label for="confirmPin">Confirm PIN</label>
+          <input type="password" id="confirmPin" placeholder="Confirm PIN" maxlength="6" pattern="[0-9]*">
+        </div>
+        
+        <button class="primary-btn" id="createVaultBtn">Create Vault</button>
+        
+        <div class="info-box">
+          <p><strong>Important:</strong> Your PIN never leaves this device and cannot be recovered. Make sure to remember it!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unlock Screen -->
+    <div class="screen" id="unlockScreen" style="display: none;">
+      <div class="unlock-content">
+        <div class="unlock-section">
+          <label for="pinInput">Enter PIN to unlock</label>
+          <input type="password" id="pinInput" placeholder="Enter PIN" maxlength="6" pattern="[0-9]*">
+          <button class="unlock-btn" id="unlockBtn">Unlock</button>
+        </div>
+        
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+        
+        <div class="vault-info">
+          <span id="entryCount">0</span> passwords stored
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Screen (Unlocked) -->
+    <div class="screen" id="mainScreen" style="display: none;">
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <button class="action-btn" id="autofillBtn">
+          <span class="btn-icon">🔑</span>
+          <span class="btn-text">Autofill</span>
+        </button>
+        
+        <button class="action-btn" id="addPasswordBtn">
+          <span class="btn-icon">➕</span>
+          <span class="btn-text">Add Password</span>
+        </button>
+        
+        <button class="action-btn" id="generateBtn">
+          <span class="btn-icon">🎲</span>
+          <span class="btn-text">Generate</span>
+        </button>
+        
+        <button class="action-btn" id="vaultBtn">
+          <span class="btn-icon">🗂️</span>
+          <span class="btn-text">Open Vault</span>
+        </button>
+      </div>
+
+      <!-- Recent Passwords -->
+      <div class="recent-section">
+        <h3>Recent Passwords</h3>
+        <div class="password-list" id="passwordList">
+          <!-- Password items will be populated here -->
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="footer-actions">
+        <button class="secondary-btn" id="settingsBtn">⚙️ Settings</button>
+        <button class="secondary-btn" id="lockBtn">🔒 Lock</button>
+      </div>
+    </div>
+
+    <!-- Add Password Screen -->
+    <div class="screen" id="addPasswordScreen" style="display: none;">
+      <div class="screen-header">
+        <button class="back-btn" id="backFromAdd">←</button>
+        <h2>Add Password</h2>
+      </div>
+      
+      <div class="form-content">
+        <div class="input-group">
+          <label for="siteUrl">Website URL</label>
+          <input type="url" id="siteUrl" placeholder="https://example.com">
+        </div>
+        
+        <div class="input-group">
+          <label for="username">Username/Email</label>
+          <input type="text" id="username" placeholder="Enter username">
+        </div>
+        
+        <div class="input-group">
+          <label for="password">Password</label>
+          <div class="password-input">
+            <input type="password" id="password" placeholder="Enter password">
+            <button class="generate-password-btn" id="generatePasswordBtn">🎲</button>
+          </div>
+        </div>
+        
+        <div class="input-group">
+          <label for="title">Title (optional)</label>
+          <input type="text" id="title" placeholder="Custom title">
+        </div>
+        
+        <button class="primary-btn" id="savePasswordBtn">Save Password</button>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+      <div class="spinner"></div>
+      <p>Processing...</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

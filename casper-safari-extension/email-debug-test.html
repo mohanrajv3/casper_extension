@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmailJS Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        .debug {
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 EmailJS Debug Test</h1>
+        <p>Testing EmailJS initialization and email sending step by step</p>
+
+        <button onclick="testEmailJSAvailable()">1. Test EmailJS Library</button>
+        <button onclick="testInitialization()">2. Test Initialization</button>
+        <button onclick="testWelcomeEmail()">3. Test Welcome Email</button>
+        <button onclick="testBreachEmail()">4. Test Breach Email</button>
+        <button onclick="clearDebug()">Clear Debug</button>
+
+        <div id="status"></div>
+        <div class="debug" id="debug">Debug log will appear here...\n</div>
+    </div>
+
+    <!-- EmailJS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+    <script>
+        // Exact same configuration as working version
+        const CONFIG = {
+            serviceId: 'service_zi7rghf',
+            welcomeTemplateId: 'template_zgcsbzo',
+            breachTemplateId: 'template_n6m2wxk',
+            publicKey: 'dXRu3TBvGNhECPyuB'
+        };
+
+        let isInitialized = false;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const debugElement = document.getElementById('debug');
+            debugElement.textContent += `${timestamp}: ${message}\n`;
+            debugElement.scrollTop = debugElement.scrollHeight;
+            console.log(`[Debug] ${message}`);
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.className = `status ${type}`;
+            statusElement.textContent = message;
+        }
+
+        function clearDebug() {
+            document.getElementById('debug').textContent = 'Debug cleared...\n';
+            document.getElementById('status').textContent = '';
+        }
+
+        function testEmailJSAvailable() {
+            log('🔍 Testing EmailJS library availability...');
+            
+            if (typeof window.emailjs !== 'undefined') {
+                log('✅ EmailJS library is available');
+                log(`EmailJS version: ${window.emailjs.version || 'unknown'}`);
+                showStatus('EmailJS library is available', 'success');
+            } else {
+                log('❌ EmailJS library is NOT available');
+                showStatus('EmailJS library is NOT available', 'error');
+            }
+        }
+
+        function testInitialization() {
+            log('🔧 Testing EmailJS initialization...');
+            
+            if (!window.emailjs) {
+                log('❌ EmailJS library not available');
+                showStatus('EmailJS library not available', 'error');
+                return;
+            }
+
+            try {
+                log(`Service ID: ${CONFIG.serviceId}`);
+                log(`Public Key: ${CONFIG.publicKey}`);
+                
+                emailjs.init(CONFIG.publicKey);
+                isInitialized = true;
+                
+                log('✅ EmailJS initialized successfully');
+                showStatus('EmailJS initialized successfully', 'success');
+                
+            } catch (error) {
+                log(`❌ EmailJS initialization failed: ${error.message}`);
+                showStatus('EmailJS initialization failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testWelcomeEmail() {
+            log('📧 Testing welcome email...');
+            
+            if (!isInitialized) {
+                log('❌ EmailJS not initialized. Run initialization test first.');
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            try {
+                const emailData = {
+                    to_email: 'mohanrajv.agn21@gmail.com',
+                    to_name: 'mohanrajv.agn21',
+                    from_name: 'CASPER Security Team',
+                    subject: '🔐 Welcome to CASPER Password Manager - Debug Test',
+                    message: `Welcome to CASPER Password Manager!
+
+Your secure vault has been created successfully with military-grade security:
+
+🛡️ Security Features:
+• AES-256-GCM encryption with PBKDF2 key derivation
+• 5 cryptographic detection secrets per CASPER algorithm
+• Real-time breach detection with trap keys
+• Instant email alerts with forensic details
+
+This is a debug test email.
+
+Best regards,
+CASPER Security Team
+
+Sent at: ${new Date().toLocaleString()}`,
+                    timestamp: new Date().toLocaleString()
+                };
+
+                log('Email data prepared:');
+                log(JSON.stringify(emailData, null, 2));
+
+                log('📤 Sending email...');
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.welcomeTemplateId,
+                    emailData
+                );
+
+                log('✅ Email sent successfully!');
+                log(`Response: ${JSON.stringify(response, null, 2)}`);
+                showStatus('Welcome email sent successfully!', 'success');
+
+            } catch (error) {
+                log(`❌ Email sending failed: ${error.message}`);
+                log(`Error status: ${error.status}`);
+                log(`Error text: ${error.text}`);
+                log(`Full error: ${JSON.stringify(error, null, 2)}`);
+                showStatus('Email sending failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testBreachEmail() {
+            log('🚨 Testing breach alert email...');
+            
+            if (!isInitialized) {
+                log('❌ EmailJS not initialized. Run initialization test first.');
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            try {
+                const emailData = {
+                    to_email: 'mohanrajv.agn21@gmail.com',
+                    to_name: 'mohanrajv.agn21',
+                    from_name: 'CASPER Security Team',
+                    subject: '🚨 CRITICAL SECURITY ALERT - CASPER Debug Test',
+                    message: `CRITICAL SECURITY BREACH DETECTED!
+
+Your CASPER password manager has detected unauthorized access:
+
+🚨 Breach Details:
+• Detection Time: ${new Date().toLocaleString()}
+• Compromised Account: test@example.com
+• Target Website: example.com
+• Detection Method: CASPER trap key algorithm
+• Partial Password Used: trap***
+• Browser: ${navigator.userAgent.substring(0, 50)}...
+
+This is a debug test email.
+
+CASPER Security System - Real-time Breach Detection
+Sent at: ${new Date().toLocaleString()}`,
+                    breach_time: new Date().toLocaleString(),
+                    breach_account: 'test@example.com',
+                    breach_website: 'example.com',
+                    breach_reason: 'Debug test - Trap key simulation',
+                    partial_password: 'trap***',
+                    timestamp: new Date().toLocaleString()
+                };
+
+                log('Breach email data prepared:');
+                log(JSON.stringify(emailData, null, 2));
+
+                log('📤 Sending breach alert...');
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.breachTemplateId,
+                    emailData
+                );
+
+                log('✅ Breach alert sent successfully!');
+                log(`Response: ${JSON.stringify(response, null, 2)}`);
+                showStatus('Breach alert sent successfully!', 'success');
+
+            } catch (error) {
+                log(`❌ Breach alert failed: ${error.message}`);
+                log(`Error status: ${error.status}`);
+                log(`Error text: ${error.text}`);
+                log(`Full error: ${JSON.stringify(error, null, 2)}`);
+                showStatus('Breach alert failed: ' + error.message, 'error');
+            }
+        }
+
+        // Auto-initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 Debug test page loaded');
+            
+            // Wait a moment for EmailJS to load, then test
+            setTimeout(() => {
+                testEmailJSAvailable();
+                setTimeout(() => {
+                    testInitialization();
+                }, 1000);
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

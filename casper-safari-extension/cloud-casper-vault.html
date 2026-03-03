@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CASPER Cloud Vault - Breach Detection System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+        }
+        .vault-section {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        .setup-screen, .unlock-screen, .main-screen {
+            display: none;
+        }
+        .setup-screen.active, .unlock-screen.active, .main-screen.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 12px;
+            margin-bottom: 12px;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        .btn-danger {
+            background: #ef4444;
+        }
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .status.warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+        .breach-alert {
+            background: #fee2e2;
+            border: 2px solid #dc2626;
+            color: #dc2626;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .cloud-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #e5e7eb;
+        }
+        .status-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            display: block;
+        }
+        .status-label {
+            color: #64748b;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .monitoring-section {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .login-monitor {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .trap-key-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .trap-key-item {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .demo-login-form {
+            background: #f8fafc;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 CASPER Cloud Vault</h1>
+            <p>Advanced Password Manager with Real-Time Breach Detection</p>
+            <p><strong>Cloud Storage • Trap Keys • Email Alerts • Live Monitoring</strong></p>
+        </div>
+
+        <!-- Setup Screen -->
+        <div class="vault-section setup-screen active" id="setupScreen">
+            <h2>Create Your CASPER Cloud Vault</h2>
+            <p>Set up a secure vault with cloud storage and breach detection</p>
+            
+            <div class="form-group">
+                <label for="setupPin">Master PIN (4-6 digits)</label>
+                <input type="password" id="setupPin" placeholder="Enter PIN" maxlength="6" pattern="[0-9]*">
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPin">Confirm PIN</label>
+                <input type="password" id="confirmPin" placeholder="Confirm PIN" maxlength="6" pattern="[0-9]*">
+            </div>
+
+            <div class="form-group">
+                <label for="ownerEmail">Your Email (for breach alerts)</label>
+                <input type="email" id="ownerEmail" placeholder="your@email.com" required>
+            </div>
+            
+            <button class="btn" onclick="createCloudVault()">Create Cloud Vault</button>
+            
+            <div class="status info">
+                <strong>CASPER Features:</strong>
+                <ul style="margin: 8px 0 0 20px;">
+                    <li>🔐 PIN-based encryption (never stored in cloud)</li>
+                    <li>☁️ Encrypted cloud storage with trap keys</li>
+                    <li>🚨 Real-time breach detection</li>
+                    <li>📧 Instant email alerts for security breaches</li>
+                    <li>🛡️ Advanced cryptographic protection</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Unlock Screen -->
+        <div class="vault-section unlock-screen" id="unlockScreen">
+            <h2>Unlock Your Cloud Vault</h2>
+            <p>Enter your PIN to access your cloud-stored passwords</p>
+            
+            <div class="form-group">
+                <label for="unlockPin">Enter PIN</label>
+                <input type="password" id="unlockPin" placeholder="Enter PIN" maxlength="6" pattern="[0-9]*">
+            </div>
+            
+            <button class="btn" onclick="unlockCloudVault()">Unlock Vault</button>
+            <button class="btn-secondary btn" onclick="resetCloudVault()">Reset Vault</button>
+            
+            <div id="unlockStatus"></div>
+        </div>
+
+        <!-- Main Vault Screen -->
+        <div class="vault-section main-screen" id="mainScreen">
+            <div class="cloud-status">
+                <div class="status-card">
+                    <span class="status-value" id="passwordCount">0</span>
+                    <div class="status-label">Passwords</div>
+                </div>
+                <div class="status-card">
+                    <span class="status-value" id="trapKeyCount">4</span>
+                    <div class="status-label">Trap Keys</div>
+                </div>
+                <div class="status-card">
+                    <span class="status-value" id="cloudStatus">🟢</span>
+                    <div class="status-label">Cloud Status</div>
+                </div>
+                <div class="status-card">
+                    <span class="status-value" id="breachCount">0</span>
+                    <div class="status-label">Breaches Detected</div>
+                </div>
+            </div>
+
+            <!-- Breach Alert Section -->
+            <div id="breachAlertSection" style="display: none;">
+                <div class="breach-alert">
+                    🚨 <strong>SECURITY BREACH DETECTED!</strong><br>
+                    Someone used a trap key to access your vault. Check your email for details.
+                    <button class="btn-secondary btn" onclick="viewBreachDetails()" style="margin-left: 20px;">View Details</button>
+                </div>
+            </div>
+
+            <!-- Live Monitoring Section -->
+            <div class="monitoring-section">
+                <h3>🔍 Live Login Monitoring</h3>
+                <p>CASPER is actively monitoring login attempts across all websites</p>
+                
+                <div class="login-monitor" id="loginMonitor">
+                    <strong>Status:</strong> <span id="monitorStatus">Waiting for login attempts...</span>
+                </div>
+
+                <button class="btn-secondary btn" onclick="toggleMonitoring()" id="monitorToggle">
+                    🔍 Start Monitoring
+                </button>
+            </div>
+
+            <!-- Password Management -->
+            <div class="vault-section">
+                <h3>Password Management</h3>
+                
+                <button class="btn" onclick="showAddPasswordForm()">➕ Add Password</button>
+                <button class="btn-secondary btn" onclick="syncWithCloud()">☁️ Sync Now</button>
+                <button class="btn-secondary btn" onclick="lockVault()">🔒 Lock Vault</button>
+
+                <div id="addPasswordForm" style="display: none; margin-top: 20px;">
+                    <h4>Add New Password</h4>
+                    <div class="form-group">
+                        <label for="newSite">Website URL</label>
+                        <input type="url" id="newSite" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="newUsername">Username/Email</label>
+                        <input type="text" id="newUsername" placeholder="Enter username">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">Password</label>
+                        <input type="password" id="newPassword" placeholder="Enter password">
+                    </div>
+                    <button class="btn" onclick="addPasswordToCloud()">Save to Cloud</button>
+                    <button class="btn-secondary btn" onclick="hideAddPasswordForm()">Cancel</button>
+                </div>
+
+                <div id="passwordList" style="margin-top: 20px;">
+                    <!-- Passwords will be displayed here -->
+                </div>
+            </div>
+
+            <!-- Demo Login Form for Testing -->
+            <div class="demo-login-form">
+                <h4>🧪 Test Breach Detection</h4>
+                <p>Use this form to test CASPER's breach detection system</p>
+                <form id="demoLoginForm">
+                    <div class="form-group">
+                        <label for="demoEmail">Email</label>
+                        <input type="email" id="demoEmail" placeholder="test@example.com" value="demo@test.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="demoPassword">Password</label>
+                        <input type="password" id="demoPassword" placeholder="Enter password" value="demo123">
+                    </div>
+                    <button type="submit" class="btn-secondary btn">Test Login (Triggers Detection)</button>
+                </form>
+            </div>
+
+            <!-- Trap Keys Display -->
+            <div class="vault-section">
+                <h3>🔑 Trap Keys (Decoy Detection)</h3>
+                <p>These are decoy keys that detect unauthorized access attempts</p>
+                <div class="trap-key-list" id="trapKeyList">
+                    <!-- Trap keys will be displayed here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="statusMessages"></div>
+    </div>
+
+    <!-- Include CASPER crypto libraries -->
+    <script src="crypto/casper.js"></script>
+    <script src="crypto/vault-crypto.js"></script>
+
+    <script>
+        // Cloud CASPER Vault with Breach Detection
+        class CloudCasperVault {
+            constructor() {
+                this.vault = new VaultCrypto();
+                this.isUnlocked = false;
+                this.passwords = [];
+                this.trapKeys = [];
+                this.ownerEmail = '';
+                this.monitoringActive = false;
+                this.breachCount = 0;
+                this.cloudEndpoint = 'https://api.casper-vault.com'; // Simulated cloud endpoint
+                
+                this.init();
+            }
+
+            async init() {
+                // Override vault methods for cloud storage
+                this.vault.storeCloudData = async (data) => {
+                    return await this.storeInCloud(data);
+                };
+
+                this.vault.fetchCloudData = async () => {
+                    return await this.fetchFromCloud();
+                };
+
+                // Check if vault exists
+                const exists = await this.vault.vaultExists();
+                if (exists) {
+                    this.showScreen('unlock');
+                } else {
+                    this.showScreen('setup');
+                }
+
+                // Setup login monitoring
+                this.setupLoginMonitoring();
+            }
+
+            showScreen(screen) {
+                document.querySelectorAll('.setup-screen, .unlock-screen, .main-screen').forEach(s => {
+                    s.classList.remove('active');
+                });
+                document.getElementById(screen + 'Screen').classList.add('active');
+            }
+
+            async createCloudVault() {
+                const pin = document.getElementById('setupPin').value;
+                const confirmPin = document.getElementById('confirmPin').value;
+                const email = document.getElementById('ownerEmail').value;
+
+                if (!pin || pin.length < 4) {
+                    this.showStatus('PIN must be at least 4 digits', 'error');
+                    return;
+                }
+
+                if (pin !== confirmPin) {
+                    this.showStatus('PINs do not match', 'error');
+                    return;
+                }
+
+                if (!email || !this.isValidEmail(email)) {
+                    this.showStatus('Please enter a valid email address', 'error');
+                    return;
+                }
+
+                try {
+                    this.ownerEmail = email;
+                    
+                    // Create vault with enhanced cloud features
+                    const result = await this.vault.initializeVault(pin);
+                    if (result.success) {
+                        // Generate additional trap keys for cloud detection
+                        await this.generateCloudTrapKeys();
+                        
+                        this.isUnlocked = true;
+                        this.showScreen('main');
+                        this.loadPasswords();
+                        this.updateCloudStatus();
+                        this.showStatus('Cloud vault created successfully! Breach detection is now active.', 'success');
+                        
+                        // Send welcome email
+                        await this.sendWelcomeEmail();
+                    } else {
+                        this.showStatus(result.message, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Failed to create cloud vault: ' + error.message, 'error');
+                }
+            }
+
+            async unlockCloudVault() {
+                const pin = document.getElementById('unlockPin').value;
+
+                if (!pin) {
+                    this.showStatus('Please enter your PIN', 'error');
+                    return;
+                }
+
+                try {
+                    const result = await this.vault.unlockVault(pin);
+                    if (result.success) {
+                        this.isUnlocked = true;
+                        this.showScreen('main');
+                        this.loadPasswords();
+                        this.loadTrapKeys();
+                        this.updateCloudStatus();
+                        this.showStatus('Cloud vault unlocked successfully!', 'success');
+                    } else {
+                        this.showStatus(result.message, 'error');
+                    }
+                } catch (error) {
+                    this.showStatus('Failed to unlock vault: ' + error.message, 'error');
+                }
+            }
+
+            // Cloud Storage Implementation (Simulated)
+            async storeInCloud(data) {
+                try {
+                    // Add cloud metadata
+                    const cloudData = {
+                        ...data,
+                        ownerEmail: this.ownerEmail,
+                        lastSync: Date.now(),
+                        cloudVersion: '1.0'
+                    };
+
+                    // Simulate cloud storage (in real implementation, this would be an API call)
+                    localStorage.setItem('casper_cloud_vault', JSON.stringify(cloudData));
+                    
+                    // Simulate network delay
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    this.showStatus('Data synced to cloud successfully', 'success');
+                    return true;
+                } catch (error) {
+                    this.showStatus('Cloud sync failed: ' + error.message, 'error');
+                    return false;
+                }
+            }
+
+            async fetchFromCloud() {
+                try {
+                    // Simulate cloud fetch (in real implementation, this would be an API call)
+                    const data = localStorage.getItem('casper_cloud_vault');
+                    
+                    if (data) {
+                        const cloudData = JSON.parse(data);
+                        this.ownerEmail = cloudData.ownerEmail || '';
+                        return cloudData;
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    this.showStatus('Failed to fetch from cloud: ' + error.message, 'error');
+                    return null;
+                }
+            }
+
+            // Trap Key Generation for Cloud Detection
+            async generateCloudTrapKeys() {
+                try {
+                    const casper = new CasperCrypto();
+                    const cloudData = await this.vault.fetchCloudData();
+                    
+                    if (cloudData && cloudData.casper) {
+                        // Convert trap keys from storage
+                        this.trapKeys = cloudData.casper.trapPublicKeys.map((key, index) => ({
+                            id: `trap_${index}`,
+                            publicKey: key,
+                            created: Date.now(),
+                            type: 'decoy'
+                        }));
+                        
+                        this.showStatus(`Generated ${this.trapKeys.length} trap keys for breach detection`, 'info');
+                    }
+                } catch (error) {
+                    console.error('Failed to generate trap keys:', error);
+                }
+            }
+
+            // Login Monitoring System
+            setupLoginMonitoring() {
+                // Monitor all forms on the page
+                this.scanForLoginForms();
+                
+                // Set up mutation observer for dynamic forms
+                const observer = new MutationObserver(() => {
+                    if (this.monitoringActive) {
+                        this.scanForLoginForms();
+                    }
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+
+            scanForLoginForms() {
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    if (!form.hasAttribute('data-casper-monitored')) {
+                        form.setAttribute('data-casper-monitored', 'true');
+                        this.attachLoginMonitor(form);
+                    }
+                });
+            }
+
+            attachLoginMonitor(form) {
+                form.addEventListener('submit', async (e) => {
+                    if (this.monitoringActive) {
+                        await this.handleLoginAttempt(form, e);
+                    }
+                });
+            }
+
+            async handleLoginAttempt(form, event) {
+                const passwordField = form.querySelector('input[type="password"]');
+                const usernameField = form.querySelector('input[type="email"], input[type="text"]');
+
+                if (passwordField && usernameField) {
+                    const username = usernameField.value;
+                    const password = passwordField.value;
+                    const website = window.location.hostname;
+
+                    // Update monitoring status
+                    this.updateMonitorStatus(`Detected login attempt on ${website}`);
+
+                    // Check if this is a trap key usage
+                    const breachResult = await this.checkForTrapKeyUsage(username, password, website);
+                    
+                    if (breachResult.isBreach) {
+                        // BREACH DETECTED!
+                        event.preventDefault(); // Stop the login
+                        await this.handleBreachDetection(breachResult);
+                    } else {
+                        // Normal login - offer to save if new
+                        if (this.isUnlocked) {
+                            this.offerToSaveCredentials(username, password, website);
+                        }
+                    }
+                }
+            }
+
+            async checkForTrapKeyUsage(username, password, website) {
+                try {
+                    // Simulate checking against trap keys stored in cloud
+                    const cloudData = await this.vault.fetchCloudData();
+                    
+                    if (!cloudData || !cloudData.casper) {
+                        return { isBreach: false };
+                    }
+
+                    // In a real implementation, this would check if the password
+                    // corresponds to any of the trap keys
+                    const casper = new CasperCrypto();
+                    
+                    // Simulate trap key detection (simplified for demo)
+                    const suspiciousPatterns = [
+                        'trap123', 'decoy456', 'fake789', 'honeypot',
+                        'casper_trap_1', 'casper_trap_2', 'casper_trap_3', 'casper_trap_4'
+                    ];
+                    
+                    const isTrapKey = suspiciousPatterns.some(pattern => 
+                        password.toLowerCase().includes(pattern.toLowerCase())
+                    );
+
+                    if (isTrapKey) {
+                        return {
+                            isBreach: true,
+                            trapKeyId: 'trap_detected',
+                            website: website,
+                            username: username,
+                            timestamp: Date.now(),
+                            severity: 'CRITICAL'
+                        };
+                    }
+
+                    return { isBreach: false };
+                } catch (error) {
+                    console.error('Error checking trap keys:', error);
+                    return { isBreach: false };
+                }
+            }
+
+            async handleBreachDetection(breachResult) {
+                this.breachCount++;
+                
+                // Show immediate alert
+                this.showBreachAlert(breachResult);
+                
+                // Send email alert
+                await this.sendBreachAlert(breachResult);
+                
+                // Log breach event
+                await this.logBreachEvent(breachResult);
+                
+                // Update UI
+                this.updateCloudStatus();
+                
+                this.showStatus('🚨 CRITICAL: Breach detected! Email alert sent.', 'error');
+            }
+
+            showBreachAlert(breachResult) {
+                const alertSection = document.getElementById('breachAlertSection');
+                alertSection.style.display = 'block';
+                
+                // Scroll to alert
+                alertSection.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            async sendBreachAlert(breachResult) {
+                try {
+                    // Simulate sending email alert
+                    const emailData = {
+                        to: this.ownerEmail,
+                        subject: '🚨 CASPER Security Alert: Breach Detected',
+                        body: `
+                            SECURITY BREACH DETECTED!
+                            
+                            Time: ${new Date(breachResult.timestamp).toLocaleString()}
+                            Website: ${breachResult.website}
+                            Username: ${breachResult.username}
+                            Trap Key ID: ${breachResult.trapKeyId}
+                            Severity: ${breachResult.severity}
+                            
+                            Someone has used a trap key to access your vault data.
+                            This indicates that your cloud storage may have been compromised.
+                            
+                            Recommended Actions:
+                            1. Change your master PIN immediately
+                            2. Review all stored passwords
+                            3. Enable two-factor authentication where possible
+                            4. Monitor your accounts for suspicious activity
+                            
+                            - CASPER Security System
+                        `
+                    };
+
+                    // Simulate email sending (in real implementation, this would call an email API)
+                    console.log('📧 Breach Alert Email Sent:', emailData);
+                    
+                    // Show confirmation
+                    this.showStatus(`📧 Breach alert sent to ${this.ownerEmail}`, 'warning');
+                    
+                    return true;
+                } catch (error) {
+                    this.showStatus('Failed to send breach alert email: ' + error.message, 'error');
+                    return false;
+                }
+            }
+
+            async sendWelcomeEmail() {
+                try {
+                    const emailData = {
+                        to: this.ownerEmail,
+                        subject: '🔐 Welcome to CASPER Cloud Vault',
+                        body: `
+                            Welcome to CASPER!
+                            
+                            Your secure cloud vault has been created successfully.
+                            
+                            Security Features Enabled:
+                            ✅ PIN-based encryption
+                            ✅ Cloud storage with trap keys
+                            ✅ Real-time breach detection
+                            ✅ Email alerts for security events
+                            
+                            Your vault is now protected by ${this.trapKeys.length} trap keys.
+                            If anyone tries to access your data without authorization,
+                            you'll be notified immediately.
+                            
+                            Stay secure!
+                            - CASPER Team
+                        `
+                    };
+
+                    console.log('📧 Welcome Email Sent:', emailData);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to send welcome email:', error);
+                    return false;
+                }
+            }
+
+            toggleMonitoring() {
+                this.monitoringActive = !this.monitoringActive;
+                const button = document.getElementById('monitorToggle');
+                
+                if (this.monitoringActive) {
+                    button.textContent = '🛑 Stop Monitoring';
+                    button.className = 'btn-danger btn';
+                    this.updateMonitorStatus('🔍 Active - Monitoring all login forms');
+                    this.showStatus('Login monitoring activated', 'success');
+                } else {
+                    button.textContent = '🔍 Start Monitoring';
+                    button.className = 'btn-secondary btn';
+                    this.updateMonitorStatus('⏸️ Inactive - Click to start monitoring');
+                    this.showStatus('Login monitoring deactivated', 'info');
+                }
+            }
+
+            updateMonitorStatus(message) {
+                const statusElement = document.getElementById('monitorStatus');
+                if (statusElement) {
+                    statusElement.textContent = message;
+                }
+            }
+
+            loadTrapKeys() {
+                const container = document.getElementById('trapKeyList');
+                if (!container || this.trapKeys.length === 0) return;
+
+                container.innerHTML = this.trapKeys.map((key, index) => `
+                    <div class="trap-key-item">
+                        <strong>Trap Key ${index + 1}</strong><br>
+                        ID: ${key.id}<br>
+                        Type: ${key.type}<br>
+                        Status: 🟢 Active
+                    </div>
+                `).join('');
+            }
+
+            updateCloudStatus() {
+                document.getElementById('passwordCount').textContent = this.passwords.length;
+                document.getElementById('trapKeyCount').textContent = this.trapKeys.length;
+                document.getElementById('breachCount').textContent = this.breachCount;
+                document.getElementById('cloudStatus').textContent = this.isUnlocked ? '🟢' : '🔴';
+            }
+
+            // Utility functions
+            isValidEmail(email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return emailRegex.test(email);
+            }
+
+            showStatus(message, type = 'info') {
+                const container = document.getElementById('statusMessages');
+                const statusDiv = document.createElement('div');
+                statusDiv.className = `status ${type}`;
+                statusDiv.textContent = message;
+                
+                container.appendChild(statusDiv);
+                
+                setTimeout(() => {
+                    statusDiv.remove();
+                }, 5000);
+            }
+
+            // Additional methods for password management
+            loadPasswords() {
+                if (!this.isUnlocked || !this.vault.vaultData) return;
+                this.passwords = this.vault.vaultData.passwords || [];
+                this.displayPasswords();
+            }
+
+            displayPasswords() {
+                const container = document.getElementById('passwordList');
+                if (this.passwords.length === 0) {
+                    container.innerHTML = '<div class="status info">No passwords stored yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = this.passwords.map(password => `
+                    <div class="status" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>${password.title}</strong><br>
+                            <small>${password.username} • ${password.url}</small>
+                        </div>
+                        <button class="btn-secondary btn" onclick="cloudVault.copyPassword('${password.id}')">📋 Copy</button>
+                    </div>
+                `).join('');
+            }
+
+            async copyPassword(id) {
+                const password = this.passwords.find(p => p.id === id);
+                if (password) {
+                    try {
+                        await navigator.clipboard.writeText(password.password);
+                        this.showStatus('Password copied to clipboard!', 'success');
+                    } catch (error) {
+                        this.showStatus('Failed to copy password', 'error');
+                    }
+                }
+            }
+
+            // Form management
+            showAddPasswordForm() {
+                document.getElementById('addPasswordForm').style.display = 'block';
+            }
+
+            hideAddPasswordForm() {
+                document.getElementById('addPasswordForm').style.display = 'none';
+            }
+
+            async addPasswordToCloud() {
+                const site = document.getElementById('newSite').value;
+                const username = document.getElementById('newUsername').value;
+                const password = document.getElementById('newPassword').value;
+
+                if (!site || !username || !password) {
+                    this.showStatus('Please fill in all fields', 'error');
+                    return;
+                }
+
+                try {
+                    const entry = {
+                        url: site,
+                        username: username,
+                        password: password,
+                        title: new URL(site).hostname
+                    };
+
+                    await this.vault.addPassword(entry);
+                    this.loadPasswords();
+                    this.updateCloudStatus();
+                    this.hideAddPasswordForm();
+                    this.showStatus('Password saved to cloud!', 'success');
+
+                    // Clear form
+                    document.getElementById('newSite').value = '';
+                    document.getElementById('newUsername').value = '';
+                    document.getElementById('newPassword').value = '';
+                } catch (error) {
+                    this.showStatus('Failed to save password: ' + error.message, 'error');
+                }
+            }
+
+            async syncWithCloud() {
+                this.showStatus('Syncing with cloud...', 'info');
+                try {
+                    await this.vault.saveVault();
+                    this.showStatus('Cloud sync completed successfully!', 'success');
+                } catch (error) {
+                    this.showStatus('Cloud sync failed: ' + error.message, 'error');
+                }
+            }
+
+            lockVault() {
+                this.vault.lockVault();
+                this.isUnlocked = false;
+                this.passwords = [];
+                this.showScreen('unlock');
+                this.showStatus('Vault locked', 'info');
+            }
+
+            resetCloudVault() {
+                if (confirm('Are you sure you want to reset your cloud vault? This will delete all data!')) {
+                    localStorage.removeItem('casper_cloud_vault');
+                    this.showScreen('setup');
+                    this.showStatus('Cloud vault reset successfully', 'info');
+                }
+            }
+
+            viewBreachDetails() {
+                alert('Breach Details:\n\nA trap key was used to access your vault data.\nThis indicates unauthorized access to your cloud storage.\n\nCheck your email for detailed information.');
+            }
+
+            offerToSaveCredentials(username, password, website) {
+                // Check if we already have this credential
+                const exists = this.passwords.some(p => 
+                    p.username === username && p.url.includes(website)
+                );
+
+                if (!exists) {
+                    const save = confirm(`Save credentials for ${website}?\n\nUsername: ${username}\nPassword: ${'•'.repeat(password.length)}`);
+                    if (save) {
+                        // Auto-fill the add password form
+                        document.getElementById('newSite').value = `https://${website}`;
+                        document.getElementById('newUsername').value = username;
+                        document.getElementById('newPassword').value = password;
+                        this.showAddPasswordForm();
+                    }
+                }
+            }
+        }
+
+        // Global functions
+        let cloudVault;
+
+        function createCloudVault() {
+            cloudVault.createCloudVault();
+        }
+
+        function unlockCloudVault() {
+            cloudVault.unlockCloudVault();
+        }
+
+        function resetCloudVault() {
+            cloudVault.resetCloudVault();
+        }
+
+        function toggleMonitoring() {
+            cloudVault.toggleMonitoring();
+        }
+
+        function showAddPasswordForm() {
+            cloudVault.showAddPasswordForm();
+        }
+
+        function hideAddPasswordForm() {
+            cloudVault.hideAddPasswordForm();
+        }
+
+        function addPasswordToCloud() {
+            cloudVault.addPasswordToCloud();
+        }
+
+        function syncWithCloud() {
+            cloudVault.syncWithCloud();
+        }
+
+        function lockVault() {
+            cloudVault.lockVault();
+        }
+
+        function viewBreachDetails() {
+            cloudVault.viewBreachDetails();
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            cloudVault = new CloudCasperVault();
+            
+            // Setup PIN input restrictions
+            ['setupPin', 'confirmPin', 'unlockPin'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('input', (e) => {
+                        e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                    });
+                }
+            });
+
+            // Setup demo form for testing
+            document.getElementById('demoLoginForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                cloudVault.updateMonitorStatus('Demo login detected - checking for trap keys...');
+                
+                setTimeout(() => {
+                    const password = document.getElementById('demoPassword').value;
+                    if (password.toLowerCase().includes('trap')) {
+                        cloudVault.handleBreachDetection({
+                            isBreach: true,
+                            trapKeyId: 'demo_trap',
+                            website: 'demo.example.com',
+                            username: document.getElementById('demoEmail').value,
+                            timestamp: Date.now(),
+                            severity: 'CRITICAL'
+                        });
+                    } else {
+                        cloudVault.updateMonitorStatus('✅ No trap keys detected - login appears legitimate');
+                    }
+                }, 1000);
+            });
+        });
+    </script>
+</body>
+</html>

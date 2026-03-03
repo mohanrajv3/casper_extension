@@ -1,0 +1,38 @@
+{
+  "name": "casper-password-manager",
+  "version": "1.0.0",
+  "description": "Password manager with breach detection using CASPER algorithm",
+  "main": "background/service-worker.js",
+  "scripts": {
+    "build": "echo 'No build process needed for this extension'",
+    "test": "echo 'Tests not implemented yet'",
+    "lint": "echo 'Linting not configured yet'"
+  },
+  "keywords": [
+    "password-manager",
+    "security",
+    "cryptography",
+    "browser-extension",
+    "casper",
+    "breach-detection",
+    "webauthn"
+  ],
+  "author": "CASPER Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/casper-team/casper-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/casper-team/casper-extension/issues"
+  },
+  "homepage": "https://github.com/casper-team/casper-extension#readme",
+  "devDependencies": {},
+  "dependencies": {},
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "casper@casper-team.org",
+      "strict_min_version": "109.0"
+    }
+  }
+}
