@@ -186,6 +186,7 @@ class CasperPopup {
   async createVault() {
     const pin = document.getElementById('setupPin').value;
     const confirmPin = document.getElementById('confirmPin').value;
+    const alertEmail = document.getElementById('alertEmail')?.value?.trim() || '';
     
     if (!pin || pin.length < 4) {
       this.showError('PIN must be at least 4 digits');
@@ -196,19 +197,28 @@ class CasperPopup {
       this.showError('PINs do not match');
       return;
     }
+
+    if (alertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
+      this.showError('Please enter a valid alert email');
+      return;
+    }
     
     this.showLoading(true);
     
     try {
       const response = await this.sendMessage({ 
         type: 'INITIALIZE_VAULT', 
-        pin: pin 
+        pin: pin,
+        alertEmail: alertEmail
       });
       
       if (response.success) {
         await this.checkVaultStatus();
         this.showScreen('mainScreen');
         this.showSuccess('Vault created successfully!');
+        if (alertEmail) {
+          this.showSuccess('Welcome email queued. Check inbox/spam.');
+        }
       } else {
         this.showError(response.message);
       }
