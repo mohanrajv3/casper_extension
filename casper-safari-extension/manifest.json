@@ -1,0 +1,59 @@
+{
+  "manifest_version": 2,
+  "name": "CASPER Password Manager",
+  "version": "1.0.0",
+  "description": "Password manager with breach detection using CASPER algorithm",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "webRequest",
+    "webNavigation",
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "scripts": [
+      "crypto/casper.js",
+      "crypto/vault-crypto.js",
+      "background/background.js"
+    ],
+    "persistent": false
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "crypto/casper.js",
+        "content/autofill.js",
+        "content/page-monitor.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  
+  "web_accessible_resources": [
+    "vault/*",
+    "crypto/*"
+  ],
+  
+  "content_security_policy": "script-src 'self'; object-src 'self'",
+  
+  "browser_specific_settings": {
+    "safari": {
+      "strict_min_version": "14.0"
+    }
+  }
+}

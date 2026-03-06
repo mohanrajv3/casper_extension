@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmailJS Test - CASPER</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 12px;
+            margin-bottom: 12px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .debug {
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 EmailJS Test for CASPER</h1>
+        <p>Test your EmailJS configuration before using the full CASPER system.</p>
+
+        <div class="form-group">
+            <label for="testEmail">Your Email Address:</label>
+            <input type="email" id="testEmail" value="mohanrajv.agn21@gmail.com" placeholder="your@email.com">
+        </div>
+
+        <div class="form-group">
+            <label for="testSubject">Subject:</label>
+            <input type="text" id="testSubject" value="🔧 CASPER EmailJS Test" placeholder="Test subject">
+        </div>
+
+        <div class="form-group">
+            <label for="testMessage">Message:</label>
+            <textarea id="testMessage" rows="4" placeholder="Test message">This is a test email from CASPER Password Manager to verify EmailJS configuration is working correctly.</textarea>
+        </div>
+
+        <button onclick="testWelcomeTemplate()">Test Welcome Template</button>
+        <button onclick="testBreachTemplate()">Test Breach Template</button>
+        <button onclick="testBasicEmail()">Test Basic Email</button>
+        <button onclick="testMinimalEmail()">Test Minimal Email</button>
+        <button onclick="testStandardVars()">Test Standard Variables</button>
+        <button onclick="clearDebug()">Clear Debug</button>
+
+        <div id="status"></div>
+
+        <h3>Debug Log:</h3>
+        <div id="debug" class="debug">Initializing EmailJS test...\n</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script>
+        // Your EmailJS configuration
+        const CONFIG = {
+            serviceId: 'service_zi7rghf',
+            welcomeTemplateId: 'template_zgcsbzo',
+            breachTemplateId: 'template_n6m2wxk',
+            publicKey: 'dXRu3TBvGNhECPyuB'
+        };
+
+        let isInitialized = false;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const debugElement = document.getElementById('debug');
+            debugElement.textContent += `${timestamp}: ${message}\n`;
+            debugElement.scrollTop = debugElement.scrollHeight;
+            console.log(`[EmailJS Test] ${message}`);
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.className = `status ${type}`;
+            statusElement.textContent = message;
+        }
+
+        function clearDebug() {
+            document.getElementById('debug').textContent = 'Debug cleared...\n';
+            document.getElementById('status').textContent = '';
+        }
+
+        // Initialize EmailJS
+        function initEmailJS() {
+            try {
+                log('🔧 Initializing EmailJS...');
+                log(`Service ID: ${CONFIG.serviceId}`);
+                log(`Public Key: ${CONFIG.publicKey}`);
+                
+                emailjs.init(CONFIG.publicKey);
+                isInitialized = true;
+                
+                log('✅ EmailJS initialized successfully');
+                showStatus('EmailJS initialized successfully', 'success');
+                
+            } catch (error) {
+                log(`❌ EmailJS initialization failed: ${error.message}`);
+                showStatus('EmailJS initialization failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testBasicEmail() {
+            if (!isInitialized) {
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            const email = document.getElementById('testEmail').value;
+            const subject = document.getElementById('testSubject').value;
+            const message = document.getElementById('testMessage').value;
+
+            if (!email || !subject || !message) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                log('📧 Sending basic test email...');
+                
+                const templateParams = {
+                    to_email: email,
+                    to_name: email.split('@')[0],
+                    subject: subject,
+                    message: message,
+                    timestamp: new Date().toLocaleString()
+                };
+
+                log('Template params: ' + JSON.stringify(templateParams, null, 2));
+
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.welcomeTemplateId,
+                    templateParams
+                );
+
+                log('✅ Email sent successfully!');
+                log('Response: ' + JSON.stringify(response, null, 2));
+                showStatus('✅ Test email sent! Check your inbox.', 'success');
+
+            } catch (error) {
+                log(`❌ Email sending failed: ${error.message || 'Unknown error'}`);
+                log(`Error status: ${error.status || 'unknown'}`);
+                log(`Error text: ${error.text || 'no additional info'}`);
+                log(`Full error object: ${JSON.stringify(error, null, 2)}`);
+                showStatus('❌ Email sending failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        }
+
+        async function testWelcomeTemplate() {
+            if (!isInitialized) {
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            const email = document.getElementById('testEmail').value;
+            if (!email) {
+                showStatus('Please enter your email address', 'error');
+                return;
+            }
+
+            try {
+                log('📧 Testing welcome template...');
+                
+                // Test with EmailJS standard variables
+                const templateParams = {
+                    to_email: email,
+                    to_name: email.split('@')[0],
+                    from_name: 'CASPER Security Team',
+                    subject: '🔐 Welcome to CASPER Password Manager - Test',
+                    message: `Welcome to CASPER Password Manager!
+
+Your secure vault has been created successfully with the following features:
+
+🛡️ Security Features:
+• AES-256-GCM encryption
+• 5 cryptographic detection secrets  
+• Real-time breach detection
+• Secure local storage
+
+🚨 Important: Keep your PIN secure - it's the only way to access your vault.
+
+Best regards,
+CASPER Security Team
+
+Sent at: ${new Date().toLocaleString()}`,
+                    vault_features: '• AES-256-GCM encryption\n• 5 cryptographic detection secrets\n• Real-time breach detection\n• Secure local storage',
+                    security_note: 'Keep your PIN secure - it\'s the only way to access your vault.',
+                    timestamp: new Date().toLocaleString()
+                };
+
+                log('Welcome template params: ' + JSON.stringify(templateParams, null, 2));
+
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.welcomeTemplateId,
+                    templateParams
+                );
+
+                log('✅ Welcome email sent successfully!');
+                log('Response: ' + JSON.stringify(response, null, 2));
+                showStatus('✅ Welcome email sent! Check your inbox.', 'success');
+
+            } catch (error) {
+                log(`❌ Welcome email failed: ${error.message}`);
+                log(`Error status: ${error.status || 'unknown'}`);
+                log(`Error text: ${error.text || 'no additional info'}`);
+                log(`Full error object: ${JSON.stringify(error, null, 2)}`);
+                showStatus('❌ Welcome email failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        }
+
+        async function testBreachTemplate() {
+            if (!isInitialized) {
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            const email = document.getElementById('testEmail').value;
+            if (!email) {
+                showStatus('Please enter your email address', 'error');
+                return;
+            }
+
+            try {
+                log('🚨 Testing breach alert template...');
+                
+                const templateParams = {
+                    to_email: email,
+                    to_name: email.split('@')[0],
+                    subject: '🚨 CRITICAL SECURITY ALERT - CASPER Test',
+                    breach_time: new Date().toLocaleString(),
+                    breach_account: 'test@example.com',
+                    breach_website: 'example.com',
+                    breach_reason: 'Test breach alert - Trap key simulation',
+                    partial_password: 'trap***',
+                    immediate_actions: '1. Change your CASPER PIN immediately\n2. Review all stored passwords\n3. Change passwords for affected accounts\n4. Check for unauthorized account access',
+                    timestamp: new Date().toLocaleString()
+                };
+
+                log('Breach template params: ' + JSON.stringify(templateParams, null, 2));
+
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.breachTemplateId,
+                    templateParams
+                );
+
+                log('✅ Breach alert sent successfully!');
+                log('Response: ' + JSON.stringify(response, null, 2));
+                showStatus('✅ Breach alert sent! Check your inbox.', 'success');
+
+            } catch (error) {
+                log(`❌ Breach alert failed: ${error.message || 'Unknown error'}`);
+                log(`Error status: ${error.status || 'unknown'}`);
+                log(`Error text: ${error.text || 'no additional info'}`);
+                log(`Full error object: ${JSON.stringify(error, null, 2)}`);
+                showStatus('❌ Breach alert failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        }
+
+        async function testStandardVars() {
+            if (!isInitialized) {
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            const email = document.getElementById('testEmail').value;
+            if (!email) {
+                showStatus('Please enter your email address', 'error');
+                return;
+            }
+
+            try {
+                log('📧 Testing with standard EmailJS variables...');
+                
+                // Use the most common EmailJS template variables
+                const templateParams = {
+                    user_email: email,        // Alternative to to_email
+                    to_name: email.split('@')[0],
+                    from_name: 'CASPER Team',
+                    message: 'This is a test email from CASPER Password Manager using standard EmailJS variables.',
+                    reply_to: email
+                };
+
+                log('Standard template params: ' + JSON.stringify(templateParams, null, 2));
+
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.welcomeTemplateId,
+                    templateParams
+                );
+
+                log('✅ Standard variables email sent successfully!');
+                log('Response: ' + JSON.stringify(response, null, 2));
+                showStatus('✅ Standard variables email sent! Check your inbox.', 'success');
+
+            } catch (error) {
+                log(`❌ Standard variables email failed: ${error.message || 'Unknown error'}`);
+                log(`Error status: ${error.status || 'unknown'}`);
+                log(`Error text: ${error.text || 'no additional info'}`);
+                log(`Full error object: ${JSON.stringify(error, null, 2)}`);
+                showStatus('❌ Standard variables email failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        }
+
+        async function testMinimalEmail() {
+            if (!isInitialized) {
+                showStatus('EmailJS not initialized', 'error');
+                return;
+            }
+
+            const email = document.getElementById('testEmail').value;
+            if (!email) {
+                showStatus('Please enter your email address', 'error');
+                return;
+            }
+
+            try {
+                log('📧 Testing minimal email with basic variables...');
+                
+                // Test with only the most basic variables
+                const templateParams = {
+                    to_email: email,
+                    subject: 'CASPER Test - Minimal',
+                    message: 'This is a minimal test email.'
+                };
+
+                log('Minimal template params: ' + JSON.stringify(templateParams, null, 2));
+
+                const response = await emailjs.send(
+                    CONFIG.serviceId,
+                    CONFIG.welcomeTemplateId,
+                    templateParams
+                );
+
+                log('✅ Minimal email sent successfully!');
+                log('Response: ' + JSON.stringify(response, null, 2));
+                showStatus('✅ Minimal email sent! Check your inbox.', 'success');
+
+            } catch (error) {
+                log(`❌ Minimal email failed: ${error.message || 'Unknown error'}`);
+                log(`Error status: ${error.status || 'unknown'}`);
+                log(`Error text: ${error.text || 'no additional info'}`);
+                log(`Full error object: ${JSON.stringify(error, null, 2)}`);
+                showStatus('❌ Minimal email failed: ' + (error.message || 'Unknown error'), 'error');
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 EmailJS Test page loaded');
+            
+            // Wait a moment for EmailJS library to load
+            setTimeout(() => {
+                if (window.emailjs) {
+                    initEmailJS();
+                } else {
+                    log('❌ EmailJS library not found');
+                    showStatus('EmailJS library not loaded', 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CASPER Vault</title>
+  <link rel="stylesheet" href="vault.css">
+</head>
+<body>
+  <div class="vault-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">🔐</span>
+          <h1>CASPER</h1>
+        </div>
+        <div class="vault-status" id="vaultStatus">
+          <span class="status-icon">🔓</span>
+          <span class="status-text">Unlocked</span>
+        </div>
+      </div>
+      
+      <ul class="nav-menu">
+        <li class="nav-item active" data-section="passwords">
+          <span class="nav-icon">🔑</span>
+          <span class="nav-text">Passwords</span>
+          <span class="nav-count" id="passwordCount">0</span>
+        </li>
+        <li class="nav-item" data-section="passkeys">
+          <span class="nav-icon">🎫</span>
+          <span class="nav-text">Passkeys</span>
+          <span class="nav-count" id="passkeyCount">0</span>
+        </li>
+        <li class="nav-item" data-section="notes">
+          <span class="nav-icon">📝</span>
+          <span class="nav-text">Secure Notes</span>
+          <span class="nav-count" id="noteCount">0</span>
+        </li>
+        <li class="nav-item" data-section="generator">
+          <span class="nav-icon">🎲</span>
+          <span class="nav-text">Generator</span>
+        </li>
+        <li class="nav-item" data-section="security">
+          <span class="nav-icon">🛡️</span>
+          <span class="nav-text">Security</span>
+        </li>
+        <li class="nav-item" data-section="settings">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">Settings</span>
+        </li>
+      </ul>
+      
+      <div class="sidebar-footer">
+        <button class="lock-btn" id="lockVault">
+          <span>🔒</span>
+          <span>Lock Vault</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Passwords Section -->
+      <section class="content-section active" id="passwordsSection">
+        <div class="section-header">
+          <h2>Passwords</h2>
+          <div class="section-actions">
+            <input type="search" class="search-input" placeholder="Search passwords..." id="passwordSearch">
+            <button class="primary-btn" id="addPasswordBtn">
+              <span>➕</span>
+              <span>Add Password</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="items-grid" id="passwordsGrid">
+          <!-- Password items will be populated here -->
+        </div>
+      </section>
+
+      <!-- Authenticator Section -->
+      <section class="content-section" id="passkeysSection">
+        <div class="section-header">
+          <h2>Authenticator</h2>
+          <div class="section-actions">
+            <input type="search" class="search-input" placeholder="Search accounts..." id="passkeySearch">
+            <button class="primary-btn" id="addPasskeyBtn">
+              <span>➕</span>
+              <span>Add OTP</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="items-grid" id="passkeysGrid">
+          <div class="empty-state">
+            <span class="empty-icon">⏱️</span>
+            <h3>No OTP Accounts Yet</h3>
+            <p>Add TOTP or HOTP accounts from an otpauth:// URI or manual secret</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security Section -->
+      <section class="content-section" id="securitySection">
+        <div class="section-header">
+          <h2>Security Dashboard</h2>
+        </div>
+        
+        <div class="security-grid">
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">???</span>
+              <h3>Breach Detection</h3>
+            </div>
+            <div class="card-content">
+              <div class="status-indicator success">
+                <span class="indicator-dot"></span>
+                <span id="breachStatusLabel">No breaches detected</span>
+              </div>
+              <p>CASPER is actively monitoring for unauthorized access</p>
+            </div>
+          </div>
+          
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">??</span>
+              <h3>Vault Status</h3>
+            </div>
+            <div class="card-content">
+              <div class="vault-stats">
+                <div class="stat">
+                  <span class="stat-value" id="totalPasswords">0</span>
+                  <span class="stat-label">Passwords</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value" id="lastSync">Never</span>
+                  <span class="stat-label">Last Sync</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">??</span>
+              <h3>Risk Score</h3>
+            </div>
+            <div class="card-content">
+              <div class="vault-stats">
+                <div class="stat">
+                  <span class="stat-value" id="riskScoreValue">0</span>
+                  <span class="stat-label">Score</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value" id="riskSeverity">LOW</span>
+                  <span class="stat-label">Severity</span>
+                </div>
+              </div>
+              <p id="riskFactors">No active risk factors</p>
+            </div>
+          </div>
+          
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">??</span>
+              <h3>Decoy Monitoring</h3>
+            </div>
+            <div class="card-content">
+              <div class="status-indicator success">
+                <span class="indicator-dot"></span>
+                <span id="trapKeyCount">Decoy monitoring active</span>
+              </div>
+              <p id="decoyRegistrationState">No decoys registered yet</p>
+            </div>
+          </div>
+
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">??</span>
+              <h3>Log Integrity</h3>
+            </div>
+            <div class="card-content">
+              <div class="status-indicator success">
+                <span class="indicator-dot"></span>
+                <span id="logIntegrityStatus">Chain verified</span>
+              </div>
+              <p id="logIntegrityMeta">0 events checked</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="security-actions">
+          <button class="danger-btn" id="changePinBtn">Change PIN</button>
+          <button class="danger-btn" id="breachTestBtn">Trigger Breach Test</button>
+          <button class="secondary-btn" id="registerDecoysBtn">Register Pending Decoys</button>
+          <button class="secondary-btn" id="checkBreachNowBtn">Check Breach Now</button>
+          <button class="secondary-btn" id="simulateAttackBtn">Simulate Attack</button>
+          <button class="secondary-btn" id="exportVaultBtn">Export Vault</button>
+          <button class="secondary-btn" id="viewLogsBtn">View Security Logs</button>
+          <button class="danger-btn" id="compromisedModeBtn">Activate Compromised Mode</button>
+        </div>
+      </section>
+
+      <!-- Generator Section -->
+      <section class="content-section" id="generatorSection">
+        <div class="section-header">
+          <h2>Password Generator</h2>
+        </div>
+        
+        <div class="generator-container">
+          <div class="generator-output">
+            <input type="text" class="generated-password" id="generatedPassword" readonly>
+            <button class="copy-btn" id="copyPasswordBtn">📋</button>
+            <button class="refresh-btn" id="refreshPasswordBtn">🔄</button>
+          </div>
+          
+          <div class="generator-options">
+            <div class="option-group">
+              <label for="passwordLength">Length: <span id="lengthValue">16</span></label>
+              <input type="range" id="passwordLength" min="8" max="64" value="16">
+            </div>
+            
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="includeUppercase" checked>
+                <span>Uppercase (A-Z)</span>
+              </label>
+            </div>
+            
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="includeLowercase" checked>
+                <span>Lowercase (a-z)</span>
+              </label>
+            </div>
+            
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="includeNumbers" checked>
+                <span>Numbers (0-9)</span>
+              </label>
+            </div>
+            
+            <div class="option-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="includeSymbols" checked>
+                <span>Symbols (!@#$%)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Section -->
+      <section class="content-section" id="settingsSection">
+        <div class="section-header">
+          <h2>Settings</h2>
+        </div>
+        
+        <div class="settings-groups">
+          <div class="settings-group">
+            <h3>Security</h3>
+            <div class="setting-item">
+              <label for="autoLockTime">Auto-lock after inactivity</label>
+              <select id="autoLockTime">
+                <option value="300">5 minutes</option>
+                <option value="600">10 minutes</option>
+                <option value="1800">30 minutes</option>
+                <option value="3600">1 hour</option>
+                <option value="0">Never</option>
+              </select>
+            </div>
+            
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="breachAlerts" checked>
+                <span>Enable breach detection alerts</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="settings-group">
+            <h3>Autofill</h3>
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoFillEnabled" checked>
+                <span>Enable automatic form filling</span>
+              </label>
+            </div>
+            
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="savePrompts" checked>
+                <span>Prompt to save new passwords</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="settings-group">
+            <h3>Sync</h3>
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="syncEnabled" checked>
+                <span>Enable cloud synchronization</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h3>Email Alerts</h3>
+            <div class="setting-stack">
+              <label for="mailToEmail">Alert Email</label>
+              <input type="email" id="mailToEmail" placeholder="you@example.com">
+            </div>
+            <div class="security-actions">
+              <button class="secondary-btn" id="testEmailBtn">Send Test Email</button>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h3>Deception / Honey Server</h3>
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="deceptionEnabled" checked>
+                <span>Enable decoy credential generation</span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <label for="decoyCount">Decoys per credential</label>
+              <select id="decoyCount">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+
+            <div class="setting-stack">
+              <label for="honeyBaseUrl">Honey Server Base URL</label>
+              <input type="url" id="honeyBaseUrl" placeholder="https://your-server.example.com">
+            </div>
+
+            <div class="setting-stack">
+              <label for="honeyApiToken">Honey Server API Token (optional)</label>
+              <input type="password" id="honeyApiToken" placeholder="Bearer token">
+            </div>
+
+            <div class="setting-item">
+              <label for="honeyPollSeconds">Poll interval (seconds)</label>
+              <select id="honeyPollSeconds">
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="60">60</option>
+                <option value="120">120</option>
+                <option value="300">300</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="honeyAutoPoll">
+                <span>Auto-check honey alerts after unlock</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Item Details Panel -->
+    <aside class="details-panel" id="detailsPanel">
+      <div class="details-header">
+        <h3 id="detailsTitle">Item Details</h3>
+        <button class="close-btn" id="closeDetails">×</button>
+      </div>
+      
+      <div class="details-content" id="detailsContent">
+        <!-- Item details will be populated here -->
+      </div>
+    </aside>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal-overlay" id="modalOverlay" style="display: none;">
+    <div class="modal" id="addPasswordModal">
+      <div class="modal-header">
+        <h3>Add Password</h3>
+        <button class="close-btn" id="closeModal">×</button>
+      </div>
+      
+      <div class="modal-content">
+        <div class="form-group">
+          <label for="modalUrl">Website URL</label>
+          <input type="url" id="modalUrl" placeholder="https://example.com">
+        </div>
+        
+        <div class="form-group">
+          <label for="modalTitle">Title</label>
+          <input type="text" id="modalTitle" placeholder="Site name">
+        </div>
+        
+        <div class="form-group">
+          <label for="modalUsername">Username/Email</label>
+          <input type="text" id="modalUsername" placeholder="Enter username">
+        </div>
+        
+        <div class="form-group">
+          <label for="modalPassword">Password</label>
+          <div class="password-input-group">
+            <input type="password" id="modalPassword" placeholder="Enter password">
+            <button type="button" class="generate-btn" id="generateModalPassword">🎲</button>
+            <button type="button" class="toggle-visibility" id="toggleModalPassword">👁️</button>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="modalNotes">Notes (optional)</label>
+          <textarea id="modalNotes" placeholder="Additional notes"></textarea>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="secondary-btn" id="cancelModal">Cancel</button>
+        <button class="primary-btn" id="saveModal">Save Password</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vault.js"></script>
+</body>
+</html>
