@@ -625,6 +625,22 @@ class CasperVault {
     if (!decoyStatus.success && decoyStatus.requiresUnlock) return this.handleLockedSession();
 
     const breachCount = (response.data.breachAlerts || []).length;
+    const breachIndicator = document.getElementById('breachStatusIndicator');
+    const breachText = document.getElementById('breachStatusText');
+    const breachSubtext = document.getElementById('breachStatusSubtext');
+    if (breachIndicator) {
+      breachIndicator.className = `status-indicator${breachCount > 0 ? ' error' : ''}`;
+    }
+    if (breachText) {
+      breachText.textContent = breachCount > 0 ? `${breachCount} breach alert${breachCount > 1 ? 's' : ''} detected` : 'No breaches detected';
+    }
+    if (breachSubtext) {
+      breachSubtext.textContent =
+        breachCount > 0
+          ? 'Unauthorized decoy usage has been detected. Review security logs immediately.'
+          : 'CASPER is actively monitoring for unauthorized access';
+    }
+
     const trapLabel = document.getElementById('trapKeyCount');
     if (trapLabel) {
       trapLabel.textContent = breachCount > 0 ? `${breachCount} breach alerts` : 'Trap key monitoring active';
@@ -789,7 +805,9 @@ class CasperVault {
       this.toast(response.message || 'Breach test failed', 'error');
       return;
     }
-    this.toast('Breach test triggered. Check inbox/spam.', 'success');
+    const tone = response.emailSent ? 'success' : 'info';
+    this.toast(response.message || 'Breach test completed.', tone);
+    await this.loadSecurity();
   }
 
   async lockVault() {

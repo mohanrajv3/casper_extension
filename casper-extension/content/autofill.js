@@ -130,6 +130,10 @@ class CasperAutofill {
 
       this.notify('Credentials filled', 'ok');
     } catch (error) {
+      if (this.isContextInvalidatedError(error)) {
+        this.notify('Extension updated. Reload this tab, then try autofill again.', 'warn');
+        return;
+      }
       this.notify(`Autofill failed: ${error.message}`, 'err');
     }
   }
@@ -254,6 +258,11 @@ class CasperAutofill {
         }
       });
     });
+  }
+
+  isContextInvalidatedError(error) {
+    const msg = String(error?.message || '').toLowerCase();
+    return msg.includes('extension context invalidated') || msg.includes('context invalidated');
   }
 
   notify(text, kind) {

@@ -2,6 +2,11 @@
 
 CASPER is a browser extension password vault + authenticator (TOTP/HOTP) with breach-alert email hooks.
 
+## Documentation
+- User Guide: [USER_GUIDE.md](/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md)
+- Install Guide: [INSTALL.md](/Users/mohan/casper_web_extension/casper-extension/INSTALL.md)
+- Technical Status / Architecture / Progress: [PROJECT_TECHNICAL_STATUS.md](/Users/mohan/casper_web_extension/PROJECT_TECHNICAL_STATUS.md)
+
 ## Features
 - Encrypted vault protected by CASPER flow (PIN + secret selection + derived key)
 - Password storage and autofill

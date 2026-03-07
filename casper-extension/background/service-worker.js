@@ -188,7 +188,12 @@ async function checkHoneyServerForBreach() {
     session.vaultData.security.lastHoneyCheckAt = now();
     await persistVault();
 
-    if (!breachDetected) return { success: true, breach: false };
+    if (!breachDetected) {
+      return { success: true, breach: false, emailSentCount: 0, emailFailedCount: 0 };
+    }
+
+    let emailSentCount = 0;
+    let emailFailedCount = 0;
 
     for (const evt of events) {
       const alertEvent = {
@@ -212,11 +217,13 @@ async function checkHoneyServerForBreach() {
       await persistVault();
       const cloudData = await loadCloud();
       if (cloudData) {
-        await sendBreachEmailIfConfigured(alertEvent, cloudData);
+        const mail = await sendBreachEmailIfConfigured(alertEvent, cloudData);
+        if (mail?.sent) emailSentCount += 1;
+        else if (!mail?.skipped) emailFailedCount += 1;
       }
     }
 
-    return { success: true, breach: true, eventsCount: events.length };
+    return { success: true, breach: true, eventsCount: events.length, emailSentCount, emailFailedCount };
   } catch (error) {
     return { success: false, message: error.message };
   }
@@ -354,7 +361,9 @@ function addSecurityEvent(type, message, details = {}) {
 
 async function sendBreachEmailIfConfigured(event, cloudData) {
   const settings = session.vaultData?.settings?.mailService;
-  if (!settings?.toEmail) return;
+  if (!settings?.toEmail) {
+    return { sent: false, skipped: true, reason: 'Alert email not configured' };
+  }
 
   try {
     const result = await sendEmailWithEmailJs(EMAILJS_CONFIG.breachTemplateId, {
@@ -377,11 +386,15 @@ async function sendBreachEmailIfConfigured(event, cloudData) {
     }
     addSecurityEvent('mail_breach_sent', 'Breach email sent', { status: result.status, result: result.body });
     await persistVault();
+    return { sent: true, status: result.status, result: result.body };
   } catch (error) {
     addSecurityEvent('mail_failed', 'Failed to send breach email', { error: error.message });
     await persistVault();
-    cloudData.security.lastAccess = now();
-    await saveCloud(cloudData);
+    if (cloudData?.security) {
+      cloudData.security.lastAccess = now();
+      await saveCloud(cloudData);
+    }
+    return { sent: false, skipped: false, error: error.message };
   }
 }
 
@@ -1066,7 +1079,48 @@ async function triggerBreachTest() {
     if (!check.success) {
       return { success: false, message: check.message || 'Breach check failed' };
     }
-    return { success: true, message: check.breach ? 'Breach detected from honey server' : 'No breach event returned yet' };
+    if (check.breach) {
+      const sent = Number(check.emailSentCount || 0);
+      const failed = Number(check.emailFailedCount || 0);
+      let message = 'Breach detected from honey server.';
+      if (sent > 0) {
+        message += ` Alert email sent (${sent}).`;
+      } else if (failed > 0) {
+        message += ` Email send failed (${failed}).`;
+      } else {
+        message += ' No alert email was sent.';
+      }
+      return { success: true, breach: true, emailSent: sent > 0, message };
+    }
+
+    const cloudData = await loadCloud();
+    const testEvent = {
+      id: makeId(8),
+      type: 'breach_test',
+      message: 'Manual breach test email',
+      severity: 'TEST',
+      details: {
+        decoyId: decoy.decoyId,
+        source: 'manual_test',
+        service: decoy.serviceName || 'unknown',
+      },
+      timestamp: now(),
+    };
+    const fallbackMail = await sendBreachEmailIfConfigured(testEvent, cloudData);
+    if (fallbackMail?.sent) {
+      return {
+        success: true,
+        breach: false,
+        emailSent: true,
+        message: 'No new breach event found, but manual breach test email was sent.',
+      };
+    }
+    return {
+      success: true,
+      breach: false,
+      emailSent: false,
+      message: fallbackMail?.reason || fallbackMail?.error || 'No breach event returned and email was not sent.',
+    };
   } catch (error) {
     return { success: false, message: error.message };
   }
