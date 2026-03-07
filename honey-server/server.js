@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const PORT = Number(process.env.HONEY_PORT || 8787);
-const HOST = process.env.HONEY_HOST || '127.0.0.1';
+const PORT = Number(process.env.PORT || process.env.HONEY_PORT || 8787);
+const HOST = process.env.HONEY_HOST || '0.0.0.0';
 const API_TOKEN = String(process.env.HONEY_API_TOKEN || '').trim();
 const DATA_DIR = process.env.HONEY_DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = process.env.HONEY_DATA_FILE || path.join(DATA_DIR, 'store.json');
@@ -332,6 +332,16 @@ const server = http.createServer((req, res) => {
 
   if (route === '/health' && req.method === 'GET') {
     handleHealth(req, res);
+    return;
+  }
+
+  if (route === '/' && req.method === 'GET') {
+    writeJson(res, 200, {
+      success: true,
+      service: 'casper-honey-server',
+      message: 'Server is running',
+      endpoints: ['/health', '/decoy/register', '/decoy/check', '/auth/login', '/alerts', '/decoys'],
+    });
     return;
   }
 
