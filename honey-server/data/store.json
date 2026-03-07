@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "created_at": 1772695678438,
+  "decoys": [
+    {
+      "user_id": "bf2791a8014a2dfe5e1814c81780ec2c",
+      "decoy_id": "b96983e7b9a28d13",
+      "username": "adityasshewale2004+shadow1@gmail.com",
+      "password_hash": "6adc5b3e7be471b77b2e77e6b03fdf9fc85db179f541d7694a0890d643b94679",
+      "service_name": "auth.openai.com",
+      "created_at": 1772695678438,
+      "updated_at": 1772695678438,
+      "trigger_count": 0,
+      "last_seen_ip": "",
+      "last_seen_at": 0
+    },
+    {
+      "user_id": "bf2791a8014a2dfe5e1814c81780ec2c",
+      "decoy_id": "aa394e604ebdfa71",
+      "username": "adityasshewale2004+shadow2@gmail.com",
+      "password_hash": "2c51dd9d856d16f0502980bca1b86f205f625eceef212c21935f82c942c9a7fd",
+      "service_name": "auth.openai.com",
+      "created_at": 1772695678443,
+      "updated_at": 1772695678443,
+      "trigger_count": 0,
+      "last_seen_ip": "",
+      "last_seen_at": 0
+    },
+    {
+      "user_id": "demo-user-attack",
+      "decoy_id": "decoy-red-1",
+      "username": "victim+shadow1@example.com",
+      "password_hash": "1ec1c26b50d5d3c58d9583181af8076655fe00756bf7285940ba3670f99fcba0",
+      "service_name": "example.com",
+      "created_at": 1772695889280,
+      "updated_at": 1772695970976,
+      "trigger_count": 1,
+      "last_seen_ip": "127.0.0.1",
+      "last_seen_at": 1772695970976
+    },
+    {
+      "user_id": "776269ee8c068ee22770b6088c9af7a0",
+      "decoy_id": "9557992d07137d4a",
+      "username": "adityasshewale2004+shadow1@gmail.com",
+      "password_hash": "6adc5b3e7be471b77b2e77e6b03fdf9fc85db179f541d7694a0890d643b94679",
+      "service_name": "leetcode.com",
+      "created_at": 1772696936775,
+      "updated_at": 1772697253890,
+      "trigger_count": 1,
+      "last_seen_ip": "127.0.0.1",
+      "last_seen_at": 1772697253890
+    },
+    {
+      "user_id": "776269ee8c068ee22770b6088c9af7a0",
+      "decoy_id": "fbea327b10161b48",
+      "username": "adityasshewale2004+shadow2@gmail.com",
+      "password_hash": "2c51dd9d856d16f0502980bca1b86f205f625eceef212c21935f82c942c9a7fd",
+      "service_name": "leetcode.com",
+      "created_at": 1772696936779,
+      "updated_at": 1772696936779,
+      "trigger_count": 0,
+      "last_seen_ip": "",
+      "last_seen_at": 0
+    },
+    {
+      "user_id": "sim-btn-user",
+      "decoy_id": "sim-btn-decoy",
+      "username": "sim+shadow1@example.com",
+      "password_hash": "1ec1c26b50d5d3c58d9583181af8076655fe00756bf7285940ba3670f99fcba0",
+      "service_name": "example.com",
+      "created_at": 1772697072412,
+      "updated_at": 1772697072458,
+      "trigger_count": 1,
+      "last_seen_ip": "127.0.0.1",
+      "last_seen_at": 1772697072458
+    },
+    {
+      "user_id": "default",
+      "decoy_id": "5cccd3402d71a42a300cf5f8a0b045ee",
+      "username": "mohanrajv.agn21+shadow1@gmail.com",
+      "password_hash": "67294327bc2688537a157a1e5b0a1b283ad37c96e96627b2d5a804c0bfb1ce96",
+      "service_name": "instagram.com",
+      "created_at": 1772860638020,
+      "updated_at": 1772860673898,
+      "trigger_count": 1,
+      "last_seen_ip": "127.0.0.1",
+      "last_seen_at": 1772860673898
+    },
+    {
+      "user_id": "default",
+      "decoy_id": "a56656e80f3805d6c6fe161217b01590",
+      "username": "mohanrajv.agn21+shadow2@gmail.com",
+      "password_hash": "3252731b7673b955e8a9812bc0f71a72e8b981202b3b18716ef359963447b310",
+      "service_name": "instagram.com",
+      "created_at": 1772860638024,
+      "updated_at": 1772860638024,
+      "trigger_count": 0,
+      "last_seen_ip": "",
+      "last_seen_at": 0
+    },
+    {
+      "user_id": "default",
+      "decoy_id": "3eb39145c5167377ff93ebcd959e1314",
+      "username": "mohanrajv.agn21+shadow3@gmail.com",
+      "password_hash": "78a0c20d2b0722a2ec9c33983f6cd9b5f502ae0985caa03b9ddad982527135e5",
+      "service_name": "instagram.com",
+      "created_at": 1772860638027,
+      "updated_at": 1772860638027,
+      "trigger_count": 0,
+      "last_seen_ip": "",
+      "last_seen_at": 0
+    }
+  ],
+  "alerts": [
+    {
+      "id": "64a1957bcae985f2",
+      "user_id": "default",
+      "decoy_id": "5cccd3402d71a42a300cf5f8a0b045ee",
+      "service_name": "instagram.com",
+      "ip": "127.0.0.1",
+      "timestamp": 1772860673898
+    },
+    {
+      "id": "bce5d9c178f9242f",
+      "user_id": "776269ee8c068ee22770b6088c9af7a0",
+      "decoy_id": "9557992d07137d4a",
+      "service_name": "leetcode.com",
+      "ip": "127.0.0.1",
+      "timestamp": 1772697253890
+    },
+    {
+      "id": "8af37b38c23368b9",
+      "user_id": "sim-btn-user",
+      "decoy_id": "sim-btn-decoy",
+      "service_name": "example.com",
+      "ip": "127.0.0.1",
+      "timestamp": 1772697072458
+    },
+    {
+      "id": "9ecc7ba97629bb96",
+      "user_id": "demo-user-attack",
+      "decoy_id": "decoy-red-1",
+      "service_name": "example.com",
+      "ip": "127.0.0.1",
+      "timestamp": 1772695970976
+    }
+  ]
+}

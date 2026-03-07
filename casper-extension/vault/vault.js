@@ -95,6 +95,7 @@ class CasperVault {
       this.toast('PIN change requires vault migration; not enabled in this build.', 'info');
     });
     document.getElementById('breachTestBtn')?.addEventListener('click', () => this.triggerBreachTest());
+    document.getElementById('checkBreachNowBtn')?.addEventListener('click', () => this.checkBreachNow());
 
     document.getElementById('exportVaultBtn')?.addEventListener('click', () => this.exportVault());
     document.getElementById('viewLogsBtn')?.addEventListener('click', () => this.viewLogs());
@@ -107,6 +108,11 @@ class CasperVault {
       'autoFillEnabled',
       'savePrompts',
       'syncEnabled',
+      'deceptionEnabled',
+      'honeyServerUrl',
+      'honeyApiKey',
+      'decoyCount',
+      'pollIntervalSeconds',
       'mailToEmail',
     ].forEach((id) => {
       document.getElementById(id)?.addEventListener('change', saveSettings);
@@ -607,17 +613,26 @@ class CasperVault {
   }
 
   async loadSecurity() {
-    const response = await this.sendMessage({ type: 'GET_SECURITY_EVENTS' });
+    const [response, decoyStatus] = await Promise.all([
+      this.sendMessage({ type: 'GET_SECURITY_EVENTS' }),
+      this.sendMessage({ type: 'GET_DECOY_STATUS' }),
+    ]);
     if (!response.success) {
       if (response.requiresUnlock) return this.handleLockedSession();
       this.toast(response.message || 'Failed to load security data', 'error');
       return;
     }
+    if (!decoyStatus.success && decoyStatus.requiresUnlock) return this.handleLockedSession();
 
     const breachCount = (response.data.breachAlerts || []).length;
     const trapLabel = document.getElementById('trapKeyCount');
     if (trapLabel) {
       trapLabel.textContent = breachCount > 0 ? `${breachCount} breach alerts` : 'Trap key monitoring active';
+    }
+    const decoyLabel = document.getElementById('decoyStatusText');
+    if (decoyLabel && decoyStatus.success) {
+      const d = decoyStatus.data || {};
+      decoyLabel.textContent = `Decoys: ${d.monitoredDecoys}/${d.totalDecoys} monitored`;
     }
   }
 
@@ -650,6 +665,11 @@ class CasperVault {
     setChecked('autoFillEnabled', settings.autoFill !== false);
     setChecked('savePrompts', settings.savePrompts !== false);
     setChecked('syncEnabled', settings.syncEnabled !== false);
+    setChecked('deceptionEnabled', settings.deception?.monitoringEnabled !== false);
+    setValue('honeyServerUrl', settings.deception?.honeyServerUrl || '');
+    setValue('honeyApiKey', settings.deception?.honeyApiKey || '');
+    setValue('decoyCount', String(settings.deception?.decoyCount || 3));
+    setValue('pollIntervalSeconds', String(settings.deception?.pollIntervalSeconds || 60));
     setValue('mailToEmail', settings.mailService?.toEmail || '');
   }
 
@@ -660,6 +680,13 @@ class CasperVault {
       autoFill: Boolean(document.getElementById('autoFillEnabled').checked),
       savePrompts: Boolean(document.getElementById('savePrompts').checked),
       syncEnabled: Boolean(document.getElementById('syncEnabled').checked),
+      deception: {
+        monitoringEnabled: Boolean(document.getElementById('deceptionEnabled').checked),
+        honeyServerUrl: document.getElementById('honeyServerUrl')?.value?.trim() || '',
+        honeyApiKey: document.getElementById('honeyApiKey')?.value?.trim() || '',
+        decoyCount: Number(document.getElementById('decoyCount')?.value || 3),
+        pollIntervalSeconds: Number(document.getElementById('pollIntervalSeconds')?.value || 60),
+      },
       mailService: {
         toEmail: document.getElementById('mailToEmail')?.value?.trim() || '',
       },
@@ -682,6 +709,21 @@ class CasperVault {
 
     this.toast('Settings saved', 'success');
     return true;
+  }
+
+  async checkBreachNow() {
+    const response = await this.sendMessage({ type: 'CHECK_BREACH_NOW' });
+    if (!response.success) {
+      if (response.requiresUnlock) return this.handleLockedSession();
+      this.toast(response.message || 'Breach check failed', 'error');
+      return;
+    }
+    if (response.breach) {
+      this.toast(`Breach detected (${response.eventsCount || 0} events)`, 'error');
+    } else {
+      this.toast('No breach detected', 'success');
+    }
+    await this.loadSecurity();
   }
 
   async sendTestEmail() {

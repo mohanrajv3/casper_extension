@@ -20,6 +20,7 @@ const session = {
   unlockAt: null,
   autoLockTimer: null,
   sensitiveVerifiedUntil: 0,
+  breachPollTimer: null,
 };
 
 const DEFAULT_SETTINGS = {
@@ -27,6 +28,13 @@ const DEFAULT_SETTINGS = {
   autoLockMinutes: 5,
   breachAlerts: true,
   syncEnabled: true,
+  deception: {
+    monitoringEnabled: true,
+    honeyServerUrl: '',
+    honeyApiKey: '',
+    decoyCount: 3,
+    pollIntervalSeconds: 60,
+  },
   mailService: {
     provider: 'emailjs',
     serviceId: EMAILJS_CONFIG.serviceId,
@@ -63,6 +71,173 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
+async function sha256Hex(input) {
+  const data = new TextEncoder().encode(String(input || ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const bytes = new Uint8Array(digest);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function makeDecoyVariants(username, password, count) {
+  const safeCount = Math.max(1, Math.min(Number(count || 3), 5));
+  const suffixes = ['#', '!', '_2026', '.x', '@'];
+  const usernameBase = String(username || '').trim();
+  const passwordBase = String(password || '').trim();
+  const variants = [];
+
+  for (let i = 0; i < safeCount; i++) {
+    const userDecoy = usernameBase.includes('@')
+      ? usernameBase.replace('@', `+shadow${i + 1}@`)
+      : `${usernameBase}_shadow${i + 1}`;
+    const passDecoy = `${passwordBase}${suffixes[i % suffixes.length]}`;
+    variants.push({ username: userDecoy, password: passDecoy });
+  }
+
+  return variants;
+}
+
+async function registerDecoysWithHoneyServer(decoys, serviceName) {
+  const settings = session.vaultData?.settings?.deception || {};
+  const baseUrl = String(settings.honeyServerUrl || '').trim().replace(/\/+$/, '');
+  if (!settings.monitoringEnabled || !baseUrl || !Array.isArray(decoys) || !decoys.length) {
+    return { success: false, skipped: true, message: 'Honey server not configured' };
+  }
+
+  let successCount = 0;
+  const failures = [];
+
+  for (const decoy of decoys) {
+    try {
+      const passwordHash = await sha256Hex(decoy.password);
+      const resp = await fetch(`${baseUrl}/decoy/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          decoy_id: decoy.decoyId,
+          username: decoy.username,
+          password_hash: passwordHash,
+          service_name: serviceName,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errorBody = await resp.text();
+        failures.push({ decoyId: decoy.decoyId, status: resp.status, body: errorBody });
+        continue;
+      }
+
+      successCount += 1;
+      decoy.registeredAt = now();
+      decoy.monitoringStatus = true;
+    } catch (error) {
+      failures.push({ decoyId: decoy.decoyId, error: error.message });
+    }
+  }
+
+  return {
+    success: successCount > 0,
+    successCount,
+    failures,
+  };
+}
+
+async function checkHoneyServerForBreach() {
+  const settings = session.vaultData?.settings?.deception || {};
+  const baseUrl = String(settings.honeyServerUrl || '').trim().replace(/\/+$/, '');
+  if (!settings.monitoringEnabled || !baseUrl) {
+    return { success: false, skipped: true, message: 'Monitoring disabled or server not set' };
+  }
+
+  const monitoredDecoys = (session.vaultData.decoyCredentials || []).filter((d) => d.monitoringStatus);
+  if (!monitoredDecoys.length) return { success: true, breach: false };
+
+  try {
+    const resp = await fetch(`${baseUrl}/decoy/check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        decoy_ids: monitoredDecoys.map((d) => d.decoyId),
+        last_checked_at: session.vaultData.security?.lastHoneyCheckAt || 0,
+      }),
+    });
+
+    const bodyRaw = await resp.text();
+    let data = {};
+    try {
+      data = bodyRaw ? JSON.parse(bodyRaw) : {};
+    } catch {
+      data = {};
+    }
+
+    if (!resp.ok) {
+      return {
+        success: false,
+        message: `Honey server check failed (${resp.status})`,
+        details: data || bodyRaw,
+      };
+    }
+
+    const breachDetected = Boolean(data.breach_detected);
+    const events = Array.isArray(data.events) ? data.events : [];
+    session.vaultData.security.lastHoneyCheckAt = now();
+    await persistVault();
+
+    if (!breachDetected) return { success: true, breach: false };
+
+    for (const evt of events) {
+      const alertEvent = {
+        id: makeId(8),
+        type: 'breach_detected',
+        message: 'Decoy credential usage detected by honey server',
+        severity: 'CRITICAL',
+        details: {
+          decoyId: evt.decoy_id || 'unknown',
+          ipAddress: evt.ip_address || evt.ip || 'unknown',
+          timestamp: evt.timestamp || new Date().toISOString(),
+          service: evt.service_name || 'unknown',
+          source: 'honey_server',
+        },
+        timestamp: now(),
+      };
+
+      session.vaultData.security.breachAlerts.unshift(alertEvent);
+      session.vaultData.security.breachAlerts = session.vaultData.security.breachAlerts.slice(0, 100);
+      addSecurityEvent('breach_detected', alertEvent.message, alertEvent.details);
+      await persistVault();
+      const cloudData = await loadCloud();
+      if (cloudData) {
+        await sendBreachEmailIfConfigured(alertEvent, cloudData);
+      }
+    }
+
+    return { success: true, breach: true, eventsCount: events.length };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+}
+
+function startBreachPolling() {
+  if (!session.isUnlocked || !session.vaultData) return;
+  if (session.breachPollTimer) {
+    clearInterval(session.breachPollTimer);
+    session.breachPollTimer = null;
+  }
+  const settings = session.vaultData.settings?.deception || {};
+  if (!settings.monitoringEnabled) return;
+  const intervalSec = Math.max(30, Number(settings.pollIntervalSeconds || 60));
+  session.breachPollTimer = setInterval(() => {
+    checkHoneyServerForBreach().catch(() => {
+      // Keep polling alive; failures are recorded on demand.
+    });
+  }, intervalSec * 1000);
+}
+
 async function sendEmailWithEmailJs(templateId, templateParams) {
   const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
@@ -96,6 +271,7 @@ function normalizeVault(vault) {
     createdAt: vault.createdAt || now(),
     updatedAt: now(),
     passwords: Array.isArray(vault.passwords) ? vault.passwords : [],
+    decoyCredentials: Array.isArray(vault.decoyCredentials) ? vault.decoyCredentials : [],
     otpAccounts: Array.isArray(vault.otpAccounts) ? vault.otpAccounts : [],
     passkeys: Array.isArray(vault.passkeys) ? vault.passkeys : [],
     notes: Array.isArray(vault.notes) ? vault.notes : [],
@@ -117,6 +293,10 @@ function clearSession() {
   if (session.autoLockTimer) {
     clearTimeout(session.autoLockTimer);
     session.autoLockTimer = null;
+  }
+  if (session.breachPollTimer) {
+    clearInterval(session.breachPollTimer);
+    session.breachPollTimer = null;
   }
 }
 
@@ -307,6 +487,7 @@ async function initializeVault(pin, alertEmail = '') {
   addSecurityEvent('vault_initialized', 'Vault initialized');
   await persistVault();
   await sendWelcomeEmailIfConfigured(vault.settings.mailService.toEmail);
+  startBreachPolling();
 
   return { success: true, message: 'Vault initialized' };
 }
@@ -342,6 +523,7 @@ async function unlockVault(pin) {
 
     addSecurityEvent('vault_unlocked', 'Vault unlocked');
     await persistVault();
+    startBreachPolling();
 
     return {
       success: true,
@@ -432,7 +614,31 @@ async function addPassword(entry) {
   requireUnlocked();
   const clean = sanitizePasswordEntry(entry);
   session.vaultData.passwords.push(clean);
+  const decoyVariants = makeDecoyVariants(
+    clean.username,
+    clean.password,
+    session.vaultData.settings?.deception?.decoyCount || 3
+  );
+  const decoys = decoyVariants.map((d) => ({
+    decoyId: makeId(16),
+    parentCredentialId: clean.id,
+    serviceName: clean.domain || extractDomain(clean.url) || 'unknown',
+    username: d.username,
+    password: d.password,
+    monitoringStatus: false,
+    createdAt: now(),
+    registeredAt: null,
+  }));
+  session.vaultData.decoyCredentials.push(...decoys);
   addSecurityEvent('password_added', 'Password entry added', { domain: clean.domain });
+  await persistVault();
+  const reg = await registerDecoysWithHoneyServer(decoys, clean.domain || 'unknown');
+  addSecurityEvent('decoys_generated', 'Decoy credentials generated', {
+    credentialId: clean.id,
+    count: decoys.length,
+    registered: reg.successCount || 0,
+    failed: reg.failures?.length || 0,
+  });
   await persistVault();
   await maybeSetRecipientAndSendWelcome(clean.username);
   return { success: true, data: clean };
@@ -464,9 +670,41 @@ async function updatePassword(id, updates) {
   if (idx < 0) return { success: false, message: 'Password not found' };
 
   const existing = session.vaultData.passwords[idx];
+  const passwordChanged =
+    Object.prototype.hasOwnProperty.call(updates, 'password') &&
+    String(updates.password || '') !== String(existing.password || '');
+  const usernameChanged =
+    Object.prototype.hasOwnProperty.call(updates, 'username') &&
+    String(updates.username || '') !== String(existing.username || '');
   const merged = { ...existing, ...updates, updatedAt: now() };
   merged.domain = extractDomain(merged.url || existing.url);
   session.vaultData.passwords[idx] = merged;
+  if (passwordChanged || usernameChanged) {
+    session.vaultData.decoyCredentials = session.vaultData.decoyCredentials.filter((d) => d.parentCredentialId !== id);
+    const decoyVariants = makeDecoyVariants(
+      merged.username,
+      merged.password,
+      session.vaultData.settings?.deception?.decoyCount || 3
+    );
+    const decoys = decoyVariants.map((d) => ({
+      decoyId: makeId(16),
+      parentCredentialId: merged.id,
+      serviceName: merged.domain || extractDomain(merged.url) || 'unknown',
+      username: d.username,
+      password: d.password,
+      monitoringStatus: false,
+      createdAt: now(),
+      registeredAt: null,
+    }));
+    session.vaultData.decoyCredentials.push(...decoys);
+    const reg = await registerDecoysWithHoneyServer(decoys, merged.domain || 'unknown');
+    addSecurityEvent('decoys_regenerated', 'Decoys regenerated for updated credential', {
+      credentialId: merged.id,
+      count: decoys.length,
+      registered: reg.successCount || 0,
+      failed: reg.failures?.length || 0,
+    });
+  }
   addSecurityEvent('password_updated', 'Password entry updated', { id });
   await persistVault();
   return { success: true, data: merged };
@@ -479,6 +717,7 @@ async function deletePassword(id) {
   }
   const before = session.vaultData.passwords.length;
   session.vaultData.passwords = session.vaultData.passwords.filter((p) => p.id !== id);
+  session.vaultData.decoyCredentials = session.vaultData.decoyCredentials.filter((d) => d.parentCredentialId !== id);
   if (session.vaultData.passwords.length === before) {
     return { success: false, message: 'Password not found' };
   }
@@ -680,16 +919,27 @@ async function updateSettings(settings) {
     ...session.vaultData.settings.mailService,
     toEmail: (settings.mailService?.toEmail || settings.alertEmail || session.vaultData.settings.mailService.toEmail || '').trim(),
   };
+  const nextDeception = {
+    ...session.vaultData.settings.deception,
+    ...(settings.deception || {}),
+  };
+  nextDeception.decoyCount = Math.max(1, Math.min(5, Number(nextDeception.decoyCount || 3)));
+  nextDeception.pollIntervalSeconds = Math.max(30, Number(nextDeception.pollIntervalSeconds || 60));
+  nextDeception.honeyServerUrl = String(nextDeception.honeyServerUrl || '').trim();
+  nextDeception.honeyApiKey = String(nextDeception.honeyApiKey || '').trim();
   delete settings.mailService;
   delete settings.alertEmail;
+  delete settings.deception;
 
   session.vaultData.settings = {
     ...session.vaultData.settings,
     ...settings,
+    deception: nextDeception,
     mailService: nextMail,
   };
   addSecurityEvent('settings_updated', 'Settings updated');
   await persistVault();
+  startBreachPolling();
   return { success: true, data: session.vaultData.settings };
 }
 
@@ -784,26 +1034,65 @@ async function checkBreach(publicKeyB64, context = {}) {
 
 async function triggerBreachTest() {
   requireUnlocked();
-  const cloudData = await loadCloud();
-  if (!cloudData) return { success: false, message: 'No vault initialized' };
+  const settings = session.vaultData.settings?.deception || {};
+  const baseUrl = String(settings.honeyServerUrl || '').trim().replace(/\/+$/, '');
+  if (!settings.monitoringEnabled || !baseUrl) {
+    return { success: false, message: 'Configure Honey Server URL in Settings first' };
+  }
 
-  const event = {
-    id: makeId(8),
-    type: 'breach_test',
-    message: 'Manual breach-email test triggered by user',
-    severity: 'TEST',
-    details: {
-      url: 'extension://vault/security',
-      source: 'manual_test',
-      credentialId: 'test-credential',
+  const decoy = (session.vaultData.decoyCredentials || []).find((d) => d.monitoringStatus);
+  if (!decoy) {
+    return { success: false, message: 'No registered decoy available. Add a password first.' };
+  }
+
+  try {
+    const resp = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        username: decoy.username,
+        password: decoy.password,
+      }),
+    });
+    addSecurityEvent('breach_test', 'Simulated attacker login sent to honey endpoint', {
+      decoyId: decoy.decoyId,
+      status: resp.status,
+    });
+    await persistVault();
+    const check = await checkHoneyServerForBreach();
+    if (!check.success) {
+      return { success: false, message: check.message || 'Breach check failed' };
+    }
+    return { success: true, message: check.breach ? 'Breach detected from honey server' : 'No breach event returned yet' };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+}
+
+async function getDecoyStatus() {
+  requireUnlocked();
+  const all = session.vaultData.decoyCredentials || [];
+  const monitored = all.filter((d) => d.monitoringStatus);
+  return {
+    success: true,
+    data: {
+      totalDecoys: all.length,
+      monitoredDecoys: monitored.length,
+      lastHoneyCheckAt: session.vaultData.security?.lastHoneyCheckAt || null,
+      honeyServerUrl: session.vaultData.settings?.deception?.honeyServerUrl || '',
+      monitoringEnabled: Boolean(session.vaultData.settings?.deception?.monitoringEnabled),
     },
-    timestamp: now(),
   };
+}
 
-  addSecurityEvent('breach_test', event.message, event.details);
-  await persistVault();
-  await sendBreachEmailIfConfigured(event, cloudData);
-  return { success: true, message: 'Breach test triggered' };
+async function checkBreachNow() {
+  requireUnlocked();
+  const result = await checkHoneyServerForBreach();
+  if (!result.success) return { success: false, message: result.message || 'Breach check failed', details: result.details };
+  return { success: true, breach: Boolean(result.breach), eventsCount: result.eventsCount || 0 };
 }
 
 async function getSecurityEvents() {
@@ -832,6 +1121,10 @@ async function exportVault() {
     data: {
       exportedAt: now(),
       passwords: session.vaultData.passwords,
+      decoyCredentials: (session.vaultData.decoyCredentials || []).map((d) => ({
+        ...d,
+        password: '***masked***',
+      })),
       otpAccounts: session.vaultData.otpAccounts.map((a) => ({ ...a, secret: '***masked***' })),
       security: session.vaultData.security,
     },
@@ -932,6 +1225,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'TRIGGER_BREACH_TEST':
           response = await triggerBreachTest();
+          break;
+        case 'GET_DECOY_STATUS':
+          response = await getDecoyStatus();
+          break;
+        case 'CHECK_BREACH_NOW':
+          response = await checkBreachNow();
           break;
         case 'EXPORT_VAULT':
           response = await exportVault();

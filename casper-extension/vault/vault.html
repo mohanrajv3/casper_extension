@@ -151,7 +151,7 @@
                 <span class="indicator-dot"></span>
                 <span id="trapKeyCount">Trap key monitoring active</span>
               </div>
-              <p>Decoy keys are protecting your vault from attackers</p>
+              <p id="decoyStatusText">Decoy credentials are protecting your vault from attackers</p>
             </div>
           </div>
         </div>
@@ -159,6 +159,7 @@
         <div class="security-actions">
           <button class="danger-btn" id="changePinBtn">Change PIN</button>
           <button class="danger-btn" id="breachTestBtn">Trigger Breach Test</button>
+          <button class="secondary-btn" id="checkBreachNowBtn">Check Breach Now</button>
           <button class="secondary-btn" id="exportVaultBtn">Export Vault</button>
           <button class="secondary-btn" id="viewLogsBtn">View Security Logs</button>
         </div>
@@ -266,6 +267,42 @@
                 <input type="checkbox" id="syncEnabled" checked>
                 <span>Enable cloud synchronization</span>
               </label>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h3>Deception Monitoring</h3>
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="deceptionEnabled" checked>
+                <span>Enable honeytoken monitoring</span>
+              </label>
+            </div>
+            <div class="setting-stack">
+              <label for="honeyServerUrl">Honey Server URL</label>
+              <input type="url" id="honeyServerUrl" placeholder="https://your-honey-server.example.com">
+            </div>
+            <div class="setting-stack">
+              <label for="honeyApiKey">Honey Server API Key (optional)</label>
+              <input type="text" id="honeyApiKey" placeholder="Bearer token">
+            </div>
+            <div class="setting-item">
+              <label for="decoyCount">Decoys per credential</label>
+              <select id="decoyCount">
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="pollIntervalSeconds">Breach poll interval</label>
+              <select id="pollIntervalSeconds">
+                <option value="30">30 seconds</option>
+                <option value="60" selected>60 seconds</option>
+                <option value="120">120 seconds</option>
+                <option value="300">5 minutes</option>
+              </select>
             </div>
           </div>
 
