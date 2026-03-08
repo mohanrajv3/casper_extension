@@ -22,6 +22,8 @@ CASPER is a browser extension that combines a secure password vault, OTP authent
 - Decoy generation and honey server registration
 - Breach details modal with event metadata
 - Wrong-password warning handling from dummy login site
+- Site Risk Summary (per-service breaches/warnings)
+- Alert cleanup controls (`Clear Site Alerts`, `Clear All Alerts`)
 - Welcome/test/breach email paths (EmailJS)
 
 ## Important Scope Note
@@ -33,4 +35,4 @@ CASPER is a browser extension that combines a secure password vault, OTP authent
 2. Create vault PIN and save recovery codes.
 3. Configure honey/dummy server URL in Settings.
 4. Add credentials and verify decoy monitoring in Security tab.
-5. Run breach simulation and inspect details.
+5. Use wrong-password and decoy tests on dummy site, then inspect Security tab updates.

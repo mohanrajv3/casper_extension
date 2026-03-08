@@ -43,9 +43,11 @@ node server.js
 - test wrong password (warning event path)
 - test decoy credentials (breach path)
 5. In extension Security:
-- `Check Breach Now`
+- auto-refresh should show new events within a few seconds
+- `Check Breach Now` for immediate manual fetch
 - `View Breach Details`
 - `Security Response Guide`
+- Site Risk Summary should show `dummy-auth.local` warnings/breaches
 
 ## Notes
 - This is the recommended reviewer demo environment.

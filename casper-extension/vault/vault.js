@@ -7,6 +7,7 @@ class CasperVault {
     this.otpSearch = '';
     this.refreshTimer = null;
     this.securityTimer = null;
+    this.securityLoadBusy = false;
     this.selectedPasswordId = null;
     this.editingPasswordId = null;
     this.settings = {};
@@ -102,6 +103,8 @@ class CasperVault {
     document.getElementById('openGuidelinesBtn')?.addEventListener('click', () => this.openGuidelines());
     document.getElementById('viewBreachDetailsBtn')?.addEventListener('click', () => this.viewBreachDetails());
     document.getElementById('showDecoysDevBtn')?.addEventListener('click', () => this.showDecoysDev());
+    document.getElementById('clearAllAlertsBtn')?.addEventListener('click', () => this.clearAllAlerts());
+    document.getElementById('clearSiteAlertsBtn')?.addEventListener('click', () => this.clearSiteAlerts());
 
     document.getElementById('exportVaultBtn')?.addEventListener('click', () => this.exportVault());
     document.getElementById('viewLogsBtn')?.addEventListener('click', () => this.viewLogs());
@@ -112,6 +115,11 @@ class CasperVault {
     document.getElementById('closeBreachModalFooter')?.addEventListener('click', () => this.closeBreachDetailsModal());
     document.getElementById('breachModalOverlay')?.addEventListener('click', (e) => {
       if (e.target === e.currentTarget) this.closeBreachDetailsModal();
+    });
+    document.getElementById('closeDecoyModal')?.addEventListener('click', () => this.closeDecoyDetailsModal());
+    document.getElementById('closeDecoyModalFooter')?.addEventListener('click', () => this.closeDecoyDetailsModal());
+    document.getElementById('decoyModalOverlay')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closeDecoyDetailsModal();
     });
 
     const saveSettings = () => this.saveSettings();
@@ -649,7 +657,15 @@ class CasperVault {
     this.stopSecurityRefresh();
     this.securityTimer = setInterval(() => {
       this.updateAuthStatusCard();
-    }, 1000);
+      if (this.securityLoadBusy) return;
+      if (this.currentSection !== 'security') return;
+      this.securityLoadBusy = true;
+      this.loadSecurity()
+        .catch(() => {})
+        .finally(() => {
+          this.securityLoadBusy = false;
+        });
+    }, 4000);
   }
 
   stopSecurityRefresh() {
@@ -695,10 +711,11 @@ class CasperVault {
   }
 
   async loadSecurity() {
-    const [response, decoyStatus, authStatus] = await Promise.all([
+    const [response, decoyStatus, authStatus, siteSummary] = await Promise.all([
       this.sendMessage({ type: 'GET_SECURITY_EVENTS' }),
       this.sendMessage({ type: 'GET_DECOY_STATUS' }),
       this.sendMessage({ type: 'GET_AUTH_STATUS' }),
+      this.sendMessage({ type: 'GET_SITE_SECURITY_SUMMARY' }),
     ]);
     if (!response.success) {
       if (response.requiresUnlock) return this.handleLockedSession();
@@ -753,6 +770,28 @@ class CasperVault {
       this.authState = authStatus.data || this.authState;
       this.updateAuthStatusCard();
     }
+    this.renderSiteRiskSummary(siteSummary?.success ? (siteSummary.data || []) : []);
+  }
+
+  renderSiteRiskSummary(rows) {
+    const root = document.getElementById('siteRiskSummary');
+    if (!root) return;
+    if (!rows.length) {
+      root.innerHTML = '<p>No site-level security data yet.</p>';
+      return;
+    }
+    root.innerHTML = '';
+    rows.slice(0, 12).forEach((row) => {
+      const node = document.createElement('div');
+      node.className = 'site-risk-row';
+      const updated = row.lastEventAt ? new Date(row.lastEventAt).toLocaleString() : 'N/A';
+      node.innerHTML = `
+        <div class="domain">${row.domain}</div>
+        <div class="meta">Credentials: ${row.credentials} | Decoys: ${row.monitoredDecoys}/${row.decoys}</div>
+        <div class="meta">Breaches: ${row.breachAlerts} | Warnings: ${row.warningAlerts} | Last: ${updated}</div>
+      `;
+      root.appendChild(node);
+    });
   }
 
   async loadSettings() {
@@ -855,8 +894,12 @@ class CasperVault {
     } else {
       const existing = Number(response.totalBreachAlerts || 0);
       const wrong = Number(response.authFailureCount || 0);
+      const warnings = Number(response.warningAlertsTotal || 0);
       if (existing > 0 || wrong > 0) {
-        this.toast(`No new breach events. Existing alerts: ${existing}. Wrong-password attempts: ${wrong}`, 'info');
+        this.toast(
+          `No new breach events. Existing alerts: ${existing}. Warning alerts: ${warnings}. New wrong-password attempts: ${wrong}`,
+          'info'
+        );
       } else {
         this.toast('No breach detected', 'success');
       }
@@ -960,8 +1003,40 @@ class CasperVault {
     if (overlay) overlay.style.display = 'none';
   }
 
+  closeDecoyDetailsModal() {
+    const overlay = document.getElementById('decoyModalOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
   openGuidelines() {
     window.open(chrome.runtime.getURL('vault/security-guidelines.html'), '_blank', 'noopener');
+  }
+
+  async clearAllAlerts() {
+    if (!window.confirm('Clear all breach/warning alerts?')) return;
+    const verified = await this.verifySensitiveAction('clear_all_alerts');
+    if (!verified) return;
+    const response = await this.sendMessage({ type: 'CLEAR_ALERTS' });
+    if (!response.success) {
+      this.toast(response.message || 'Failed to clear alerts', 'error');
+      return;
+    }
+    this.toast(`Cleared ${response.cleared || 0} alerts`, 'success');
+    await this.loadSecurity();
+  }
+
+  async clearSiteAlerts() {
+    const site = window.prompt('Enter site/domain to clear alerts for (example: instagram.com or dummy-auth.local):', '');
+    if (!site) return;
+    const verified = await this.verifySensitiveAction('clear_site_alerts');
+    if (!verified) return;
+    const response = await this.sendMessage({ type: 'CLEAR_ALERTS', site: site.trim().toLowerCase() });
+    if (!response.success) {
+      this.toast(response.message || 'Failed to clear site alerts', 'error');
+      return;
+    }
+    this.toast(`Cleared ${response.cleared || 0} alerts for ${site}`, 'success');
+    await this.loadSecurity();
   }
 
   async showDecoysDev() {
@@ -989,11 +1064,24 @@ class CasperVault {
       window.alert('No decoys generated yet.');
       return;
     }
-    const lines = decoys.slice(0, 30).map((d, idx) =>
-      `${idx + 1}. [${d.serviceName}] ${d.username} / ${d.password} (${d.monitoringStatus ? 'monitored' : 'pending'})`
-    );
-    const suffix = decoys.length > 30 ? `\n\n...and ${decoys.length - 30} more` : '';
-    window.alert(`Decoy credentials (developer view):\n\n${lines.join('\n')}${suffix}`);
+    const summary = document.getElementById('decoyDetailsSummary');
+    const list = document.getElementById('decoyDetailsList');
+    const overlay = document.getElementById('decoyModalOverlay');
+    if (!summary || !list || !overlay) return;
+    summary.textContent = `Total decoys: ${decoys.length}. Showing all entries.`;
+    list.innerHTML = '';
+    decoys.forEach((d, idx) => {
+      const row = document.createElement('div');
+      row.className = 'breach-row';
+      row.innerHTML = `
+        <div><strong>${idx + 1}. [${d.serviceName}]</strong></div>
+        <div><small>Username: ${d.username}</small></div>
+        <div><small>Password: ${d.password}</small></div>
+        <div><small>Status: ${d.monitoringStatus ? 'monitored' : 'pending'}</small></div>
+      `;
+      list.appendChild(row);
+    });
+    overlay.style.display = 'flex';
   }
 
   async triggerBreachTest() {

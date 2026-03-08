@@ -183,6 +183,18 @@
             </div>
           </div>
         </div>
+
+        <div class="security-card">
+          <div class="card-header">
+            <span class="card-icon">🌐</span>
+            <h3>Site Risk Summary</h3>
+          </div>
+          <div class="card-content">
+            <div id="siteRiskSummary" class="site-risk-list">
+              <p>No site-level security data yet.</p>
+            </div>
+          </div>
+        </div>
         
         <div class="security-actions">
           <button class="danger-btn" id="changePinBtn">Change PIN</button>
@@ -191,6 +203,8 @@
           <button class="secondary-btn" id="openGuidelinesBtn">Security Response Guide</button>
           <button class="secondary-btn" id="viewBreachDetailsBtn">View Breach Details</button>
           <button class="secondary-btn" id="showDecoysDevBtn">Show Decoys (Dev)</button>
+          <button class="secondary-btn" id="clearSiteAlertsBtn">Clear Site Alerts</button>
+          <button class="secondary-btn" id="clearAllAlertsBtn">Clear All Alerts</button>
           <button class="secondary-btn" id="exportVaultBtn">Export Vault</button>
           <button class="secondary-btn" id="viewLogsBtn">View Security Logs</button>
         </div>
@@ -460,6 +474,22 @@
       </div>
       <div class="modal-footer">
         <button class="secondary-btn" id="closeBreachModalFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="decoyModalOverlay" style="display: none;">
+    <div class="modal" id="decoyDetailsModal">
+      <div class="modal-header">
+        <h3>Decoy Credentials (Developer)</h3>
+        <button class="close-btn" id="closeDecoyModal">×</button>
+      </div>
+      <div class="modal-content">
+        <div id="decoyDetailsSummary" class="breach-summary">Loading...</div>
+        <div id="decoyDetailsList" class="breach-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="closeDecoyModalFooter">Close</button>
       </div>
     </div>
   </div>

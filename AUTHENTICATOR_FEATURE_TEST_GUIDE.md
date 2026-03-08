@@ -52,8 +52,9 @@ Expected: success redirect to dashboard.
 
 Expected:
 - No forced save/update popup for failed auth.
-- Security warning event is logged.
-- Warning/breach card updates after `Check Breach Now`.
+- Security warning event is logged immediately.
+- Warning/breach card auto-updates while Security tab is open.
+- Site-scoped warning email can trigger (if not already sent for that site).
 
 ### Why
 Validates attack-signal path without corrupting stored credentials.
@@ -91,7 +92,7 @@ Expected:
 1. Confirm monitored decoy count in Security card.
 2. Click `Show Decoys (Dev)` (PIN-gated) and note one decoy.
 3. Use decoy on dummy login page.
-4. Click `Check Breach Now`.
+4. Keep Security tab open (auto-refresh) or click `Check Breach Now` for immediate fetch.
 5. Open `View Breach Details`.
 
 Expected:
@@ -115,3 +116,5 @@ Expected: actionable incident workflow is available in-app.
 7. Wrong-password warning detection: pass
 8. Breach details modal + response guide: pass
 9. Email notifications: pass
+10. Site Risk Summary accuracy: pass
+11. Alert clear controls (`Clear Site Alerts` / `Clear All Alerts`): pass

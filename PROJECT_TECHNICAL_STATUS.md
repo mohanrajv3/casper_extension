@@ -63,12 +63,19 @@ It is designed as a secure academic prototype with controlled telemetry-based de
 3. Added result-aware save prompt behavior on dummy site (no prompt on failed auth).
 4. Added wrong-password warning conversion into security events + warning alerts.
 5. Added `Security Response Guide` button and guidelines page.
+6. Added Security auto-refresh loop so dashboard updates without manual check.
+7. Changed wrong-password path to immediate warning alerts + site-scoped mail.
+8. Added alert management controls (`Clear Site Alerts`, `Clear All Alerts`).
+9. Added Site Risk Summary grouping by normalized service host.
 
 ## 5) Behavior clarifications
 1. Historical alerts remain until cleared (future enhancement).
-2. `Check Breach Now` reports new events; dashboard count includes historical alerts.
-3. Third-party backend detection (e.g., Instagram server-side auth results) is out of scope.
-4. Detection claim is valid for controlled monitored endpoints.
+2. `Check Breach Now` reports new decoy events; dashboard count includes historical alerts.
+3. Wrong-password warnings are ingested immediately from dummy-site auth-failure events.
+4. Warning email is sent once per site until that site's alerts are cleared.
+5. Third-party backend detection (e.g., Instagram server-side auth results) is out of scope.
+6. Detection claim is valid for controlled monitored endpoints.
+7. Security tab performs periodic refresh (~4s) so users do not need to click `Check Breach Now` each time.
 
 ## 6) Remaining recommended enhancements
 1. Add alert acknowledge/resolve workflow.

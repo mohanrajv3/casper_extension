@@ -47,16 +47,17 @@ Speak:
 ### Demo D: Wrong-password detection
 Action:
 1. Use wrong password on login page.
-2. In extension Security, click `Check Breach Now`.
+2. Keep Security tab open and wait for auto-refresh.
+3. Open Site Risk Summary row for `dummy-auth.local`.
 
 Speak:
-"Wrong-password attempts are captured as warning-grade security events and surfaced in the dashboard."
+"Wrong-password attempts are captured as warning-grade events, surfaced automatically, and mapped to the affected site in the risk summary."
 
 ### Demo E: Decoy breach detection
 Action:
 1. Click `Show Decoys (Dev)` and note one decoy credential.
 2. Try that decoy on `/login`.
-3. Click `Check Breach Now`.
+3. Click `Check Breach Now` (fast manual pull) if auto-refresh has not updated yet.
 4. Open `View Breach Details`.
 
 Speak:

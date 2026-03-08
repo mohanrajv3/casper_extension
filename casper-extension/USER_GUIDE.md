@@ -23,10 +23,12 @@ Open Vault -> Security:
 4. Trap Keys card: monitored decoy counts.
 
 Buttons:
-1. `Check Breach Now` -> fetches new events.
+1. `Check Breach Now` -> manual on-demand fetch for new decoy events.
 2. `View Breach Details` -> detailed event list (time, service, decoy, IP).
 3. `Security Response Guide` -> incident response checklist.
 4. `Show Decoys (Dev)` -> PIN-gated demo-only plaintext decoy viewer.
+5. `Clear Site Alerts` / `Clear All Alerts` -> PIN-gated historical alert cleanup.
+6. Site Risk Summary -> per-service breakdown (credentials, decoys, breaches, warnings, last event).
 
 ## Settings overview
 ### Security
@@ -61,5 +63,9 @@ Buttons:
 
 ## Important behavior notes
 1. `No new breach events` can still appear while old alerts remain in dashboard.
-2. Wrong-password warnings from dummy site are logged and shown as warning breach alerts.
-3. For extension updates, reload site tab if context invalidation warning appears.
+2. Wrong-password attempts on dummy login create warning alerts immediately (no manual check required).
+3. Security dashboard auto-refreshes while Security tab is open (~4 seconds).
+4. Warning mail is site-scoped (one send per site until site alerts are cleared).
+5. For extension updates, reload site tab if context invalidation warning appears.
+6. `Check Breach Now` is still useful to pull fresh decoy events from backend instantly.
+7. Use `Clear Site Alerts` after password rotation to reset that site's warning mail gate.

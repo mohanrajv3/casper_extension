@@ -4,7 +4,7 @@ const registerForm = document.getElementById('registerForm');
 const registerResult = document.getElementById('registerResult');
 const serviceInput = document.getElementById('service');
 const regServiceInput = document.getElementById('regService');
-const hostService = window.location.hostname || '127.0.0.1';
+const hostService = 'dummy-auth.local';
 
 if (serviceInput) serviceInput.value = hostService;
 if (regServiceInput) regServiceInput.value = hostService;

@@ -80,6 +80,13 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
+function normalizeServiceName(name) {
+  const raw = String(name || '').trim().toLowerCase().replace(/^www\./, '');
+  if (!raw) return 'unknown';
+  if (raw === '127.0.0.1' || raw === '0.0.0.0' || raw === 'localhost') return 'dummy-auth.local';
+  return raw;
+}
+
 async function sha256Hex(input) {
   const data = new TextEncoder().encode(String(input || ''));
   const digest = await crypto.subtle.digest('SHA-256', data);
@@ -169,12 +176,12 @@ async function registerDecoysWithHoneyServer(decoys, serviceName) {
           'Content-Type': 'application/json',
           ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
         },
-        body: JSON.stringify({
+      body: JSON.stringify({
           user_id: session.userId || 'default',
           decoy_id: decoy.decoyId,
           username: decoy.username,
           password_hash: passwordHash,
-          service_name: serviceName,
+          service_name: normalizeServiceName(serviceName),
         }),
       });
 
@@ -209,7 +216,7 @@ async function checkHoneyServerForBreach() {
   const monitoredDecoys = (session.vaultData.decoyCredentials || []).filter((d) => d.monitoringStatus);
   if (!monitoredDecoys.length) return { success: true, breach: false };
   const monitoredServices = Array.from(
-    new Set((session.vaultData.passwords || []).map((p) => p.domain).filter(Boolean))
+    new Set((session.vaultData.passwords || []).map((p) => normalizeServiceName(p.domain)).filter(Boolean))
   );
 
   try {
@@ -223,7 +230,7 @@ async function checkHoneyServerForBreach() {
         user_id: session.userId || 'default',
         decoy_ids: monitoredDecoys.map((d) => d.decoyId),
         monitor_services: monitoredServices,
-        include_auth_failures: true,
+        include_auth_failures: false,
         last_checked_at: session.vaultData.security?.lastHoneyCheckAt || 0,
       }),
     });
@@ -250,40 +257,14 @@ async function checkHoneyServerForBreach() {
     await persistVault();
 
     if (!breachDetected) {
-      const authFailureCount = events.filter((e) => String(e.event_type || '').startsWith('wrong_password')).length;
-      for (const evt of events) {
-        if (!String(evt.event_type || '').startsWith('wrong_password')) continue;
-        addSecurityEvent('risk_auth_failure', 'Wrong-password attempt observed on monitored service', {
-          service: evt.service_name || 'unknown',
-          username: evt.username || 'unknown',
-          ipAddress: evt.ip_address || evt.ip || 'unknown',
-          eventType: evt.event_type || 'wrong_password',
-          source: 'dummy_site',
-          timestamp: evt.timestamp || new Date().toISOString(),
-        });
-      }
-      if (authFailureCount > 0) await persistVault();
-      return { success: true, breach: false, emailSentCount: 0, emailFailedCount: 0, authFailureCount };
+      return { success: true, breach: false, emailSentCount: 0, emailFailedCount: 0, authFailureCount: 0 };
     }
 
     let emailSentCount = 0;
     let emailFailedCount = 0;
-    let authFailureCount = 0;
-
     for (const evt of events) {
       const eventType = String(evt.event_type || '');
-      if (eventType.startsWith('wrong_password')) {
-        authFailureCount += 1;
-        addSecurityEvent('risk_auth_failure', 'Wrong-password attempt observed on monitored service', {
-          service: evt.service_name || 'unknown',
-          username: evt.username || 'unknown',
-          ipAddress: evt.ip_address || evt.ip || 'unknown',
-          eventType,
-          source: 'dummy_site',
-          timestamp: evt.timestamp || new Date().toISOString(),
-        });
-        continue;
-      }
+      if (eventType.startsWith('wrong_password')) continue;
 
       const alertEvent = {
         id: makeId(8),
@@ -294,7 +275,7 @@ async function checkHoneyServerForBreach() {
           decoyId: evt.decoy_id || 'unknown',
           ipAddress: evt.ip_address || evt.ip || 'unknown',
           timestamp: evt.timestamp || new Date().toISOString(),
-          service: evt.service_name || 'unknown',
+          service: normalizeServiceName(evt.service_name || 'unknown'),
           source: 'honey_server',
         },
         timestamp: now(),
@@ -318,7 +299,7 @@ async function checkHoneyServerForBreach() {
       eventsCount: events.filter((e) => !String(e.event_type || '').startsWith('wrong_password')).length,
       emailSentCount,
       emailFailedCount,
-      authFailureCount,
+      authFailureCount: 0,
     };
   } catch (error) {
     return { success: false, message: error.message };
@@ -387,6 +368,10 @@ function normalizeVault(vault) {
       recoveryCodeHashes: Array.isArray(vault.security?.recoveryCodeHashes) ? vault.security.recoveryCodeHashes : [],
       usedRecoveryCodeHashes: Array.isArray(vault.security?.usedRecoveryCodeHashes) ? vault.security.usedRecoveryCodeHashes : [],
       lastHoneyCheckAt: Number(vault.security?.lastHoneyCheckAt || 0),
+      warningMailSentBySite:
+        vault.security?.warningMailSentBySite && typeof vault.security.warningMailSentBySite === 'object'
+          ? vault.security.warningMailSentBySite
+          : {},
     },
   };
 }
@@ -514,6 +499,42 @@ async function sendBreachEmailIfConfigured(event, cloudData) {
     }
     return { sent: false, skipped: false, error: error.message };
   }
+}
+
+async function sendWrongPasswordWarningEmailIfNeeded(service, username, cloudData) {
+  const site = normalizeServiceName(service || 'unknown');
+  const sentMap = session.vaultData.security.warningMailSentBySite || {};
+  if (sentMap[site]) {
+    return { sent: false, skipped: true, reason: 'Warning mail already sent for this site' };
+  }
+
+  const warningEvent = {
+    id: makeId(8),
+    type: 'breach_warning',
+    message: `Wrong password attempts detected for ${site}`,
+    severity: 'WARNING',
+    details: { service: site, username: username || 'unknown', source: 'dummy_site' },
+    timestamp: now(),
+  };
+
+  const mail = await sendBreachEmailIfConfigured(warningEvent, cloudData);
+  if (mail?.sent) {
+    session.vaultData.security.warningMailSentBySite[site] = now();
+    addSecurityEvent('mail_warning_sent', 'Wrong-password warning email sent', { service: site });
+    await persistVault();
+  }
+  return mail;
+}
+
+function hasRecentWarningForSite(service, windowMs = 10000) {
+  const site = normalizeServiceName(service || 'unknown');
+  const alerts = session.vaultData?.security?.breachAlerts || [];
+  const cutoff = now() - windowMs;
+  return alerts.some((a) => {
+    if (a.type !== 'breach_warning') return false;
+    const s = normalizeServiceName(a?.details?.service || '');
+    return s === site && Number(a.timestamp || 0) >= cutoff;
+  });
 }
 
 async function sendWelcomeEmailIfConfigured(toEmail) {
@@ -801,7 +822,7 @@ async function addPassword(entry) {
   const decoys = decoyVariants.map((d) => ({
     decoyId: makeId(16),
     parentCredentialId: clean.id,
-    serviceName: clean.domain || extractDomain(clean.url) || 'unknown',
+    serviceName: normalizeServiceName(clean.domain || extractDomain(clean.url) || 'unknown'),
     username: d.username,
     password: d.password,
     monitoringStatus: false,
@@ -868,7 +889,7 @@ async function updatePassword(id, updates) {
     const decoys = decoyVariants.map((d) => ({
       decoyId: makeId(16),
       parentCredentialId: merged.id,
-      serviceName: merged.domain || extractDomain(merged.url) || 'unknown',
+      serviceName: normalizeServiceName(merged.domain || extractDomain(merged.url) || 'unknown'),
       username: d.username,
       password: d.password,
       monitoringStatus: false,
@@ -1421,15 +1442,77 @@ async function getDecoyCredentialsDev() {
   return { success: true, data: decoys };
 }
 
+function toDomain(value) {
+  try {
+    return normalizeServiceName(new URL(String(value || '')).hostname.replace(/^www\./, ''));
+  } catch {
+    return normalizeServiceName(String(value || '').trim().replace(/^www\./, ''));
+  }
+}
+
+async function getSiteSecuritySummary() {
+  requireUnlocked();
+  const sites = new Map();
+
+  const ensureSite = (domain) => {
+    const key = normalizeServiceName(domain || 'unknown');
+    if (!sites.has(key)) {
+      sites.set(key, {
+        domain: key,
+        credentials: 0,
+        decoys: 0,
+        monitoredDecoys: 0,
+        breachAlerts: 0,
+        warningAlerts: 0,
+        lastEventAt: 0,
+      });
+    }
+    return sites.get(key);
+  };
+
+  for (const p of session.vaultData.passwords || []) {
+    const row = ensureSite(normalizeServiceName(p.domain || toDomain(p.url)));
+    row.credentials += 1;
+  }
+
+  for (const d of session.vaultData.decoyCredentials || []) {
+    const row = ensureSite(normalizeServiceName(d.serviceName || 'unknown'));
+    row.decoys += 1;
+    if (d.monitoringStatus) row.monitoredDecoys += 1;
+  }
+
+  for (const a of session.vaultData.security.breachAlerts || []) {
+    const details = a.details || {};
+    const row = ensureSite(normalizeServiceName(details.service || toDomain(details.url) || 'unknown'));
+    if (String(a.type || '') === 'breach_warning' || String(a.severity || '').toUpperCase() === 'WARNING') {
+      row.warningAlerts += 1;
+    } else {
+      row.breachAlerts += 1;
+    }
+    row.lastEventAt = Math.max(row.lastEventAt, Number(a.timestamp || 0));
+  }
+
+  const list = Array.from(sites.values()).sort((a, b) => {
+    const riskA = a.breachAlerts * 10 + a.warningAlerts * 3;
+    const riskB = b.breachAlerts * 10 + b.warningAlerts * 3;
+    if (riskB !== riskA) return riskB - riskA;
+    return String(a.domain).localeCompare(String(b.domain));
+  });
+
+  return { success: true, data: list };
+}
+
 async function checkBreachNow() {
   requireUnlocked();
   const result = await checkHoneyServerForBreach();
   if (!result.success) return { success: false, message: result.message || 'Breach check failed', details: result.details };
+  const warningAlertsTotal = (session.vaultData?.security?.breachAlerts || []).filter((a) => a.type === 'breach_warning').length;
   return {
     success: true,
     breach: Boolean(result.breach),
     eventsCount: result.eventsCount || 0,
     authFailureCount: result.authFailureCount || 0,
+    warningAlertsTotal,
     totalBreachAlerts: Array.isArray(session.vaultData?.security?.breachAlerts)
       ? session.vaultData.security.breachAlerts.length
       : 0,
@@ -1451,35 +1534,67 @@ async function getSecurityEvents() {
   };
 }
 
+async function clearAlerts(site = '') {
+  requireUnlocked();
+  if (!hasSensitiveVerification()) {
+    return { success: false, message: 'Sensitive verification required', requiresVerification: true };
+  }
+  const targetSite = normalizeServiceName(site || '');
+  const before = (session.vaultData.security.breachAlerts || []).length;
+
+  if (!targetSite) {
+    session.vaultData.security.breachAlerts = [];
+    session.vaultData.security.warningMailSentBySite = {};
+    addSecurityEvent('alerts_cleared', 'All security alerts cleared');
+    await persistVault();
+    return { success: true, cleared: before, remaining: 0 };
+  }
+
+  session.vaultData.security.breachAlerts = (session.vaultData.security.breachAlerts || []).filter((a) => {
+    const service = normalizeServiceName(a?.details?.service || a?.details?.url || '');
+    return service !== targetSite;
+  });
+  if (session.vaultData.security.warningMailSentBySite) {
+    delete session.vaultData.security.warningMailSentBySite[targetSite];
+  }
+  const after = session.vaultData.security.breachAlerts.length;
+  addSecurityEvent('alerts_cleared_site', 'Site alerts cleared', { site: targetSite, cleared: before - after });
+  await persistVault();
+  return { success: true, cleared: before - after, remaining: after };
+}
+
 async function ingestSecurityEvent(event) {
   requireUnlocked();
   if (!event?.type) return { success: false, message: 'Invalid security event' };
   if (event.type === 'auth_failure' && String(event.source || '') === 'dummy_site') {
+    const service = normalizeServiceName(event.service || 'unknown');
     addSecurityEvent('risk_auth_failure', 'Wrong-password attempt reported by dummy site', {
-      service: event.service || 'unknown',
+      service,
       username: event.username || 'unknown',
       reason: event.reason || 'invalid_credentials',
       source: 'dummy_site',
     });
-    const warning = {
-      id: makeId(8),
-      type: 'breach_warning',
-      message: 'Wrong-password activity detected on monitored login page',
-      severity: 'WARNING',
-      details: {
-        service: event.service || 'unknown',
-        username: event.username || 'unknown',
-        source: 'dummy_site',
-      },
-      timestamp: now(),
-    };
-    session.vaultData.security.breachAlerts.unshift(warning);
-    session.vaultData.security.breachAlerts = session.vaultData.security.breachAlerts.slice(0, 100);
-    await persistVault();
-    const cloudData = await loadCloud();
-    if (cloudData) {
-      await sendBreachEmailIfConfigured(warning, cloudData);
+    if (!hasRecentWarningForSite(service, 10000)) {
+      const warning = {
+        id: makeId(8),
+        type: 'breach_warning',
+        message: 'Wrong-password activity detected on monitored login page',
+        severity: 'WARNING',
+        details: {
+          service,
+          username: event.username || 'unknown',
+          source: 'dummy_site',
+        },
+        timestamp: now(),
+      };
+      session.vaultData.security.breachAlerts.unshift(warning);
+      session.vaultData.security.breachAlerts = session.vaultData.security.breachAlerts.slice(0, 100);
+      const cloudData = await loadCloud();
+      if (cloudData) {
+        await sendWrongPasswordWarningEmailIfNeeded(service, event.username || 'unknown', cloudData);
+      }
     }
+    await persistVault();
     return { success: true };
   }
 
@@ -1606,6 +1721,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'GET_SECURITY_EVENTS':
           response = await getSecurityEvents();
           break;
+        case 'CLEAR_ALERTS':
+          response = await clearAlerts(request.site || '');
+          break;
         case 'SECURITY_EVENT':
           response = await ingestSecurityEvent(request.event || {});
           break;
@@ -1624,6 +1742,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'GET_DECOY_CREDENTIALS_DEV':
           response = await getDecoyCredentialsDev();
+          break;
+        case 'GET_SITE_SECURITY_SUMMARY':
+          response = await getSiteSecuritySummary();
           break;
         case 'CHECK_BREACH_NOW':
           response = await checkBreachNow();

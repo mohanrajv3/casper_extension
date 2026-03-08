@@ -775,6 +775,28 @@ body {
   color: #64748b;
 }
 
+.site-risk-list {
+  display: grid;
+  gap: 10px;
+}
+
+.site-risk-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.site-risk-row .domain {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.site-risk-row .meta {
+  color: #475569;
+  font-size: 13px;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .sidebar {
