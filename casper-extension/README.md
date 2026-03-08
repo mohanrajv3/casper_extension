@@ -1,33 +1,36 @@
 # CASPER Browser Extension
 
-CASPER is a browser extension password vault + authenticator (TOTP/HOTP) with breach-alert email hooks.
+CASPER is a browser extension that combines a secure password vault, OTP authenticator, and deception-based breach detection.
 
-## Documentation
-- User Guide: [USER_GUIDE.md](/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md)
-- Install Guide: [INSTALL.md](/Users/mohan/casper_web_extension/casper-extension/INSTALL.md)
-- Technical Status / Architecture / Progress: [PROJECT_TECHNICAL_STATUS.md](/Users/mohan/casper_web_extension/PROJECT_TECHNICAL_STATUS.md)
+## Documentation Index
+- User Guide: [/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md](/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md)
+- Install Guide: [/Users/mohan/casper_web_extension/casper-extension/INSTALL.md](/Users/mohan/casper_web_extension/casper-extension/INSTALL.md)
+- Full Feature Test Guide: [/Users/mohan/casper_web_extension/AUTHENTICATOR_FEATURE_TEST_GUIDE.md](/Users/mohan/casper_web_extension/AUTHENTICATOR_FEATURE_TEST_GUIDE.md)
+- Reviewer Speaking Script: [/Users/mohan/casper_web_extension/REVIEWER_PRESENTATION_SCRIPT.md](/Users/mohan/casper_web_extension/REVIEWER_PRESENTATION_SCRIPT.md)
+- Technical Status: [/Users/mohan/casper_web_extension/PROJECT_TECHNICAL_STATUS.md](/Users/mohan/casper_web_extension/PROJECT_TECHNICAL_STATUS.md)
+- Dummy Fitness Site Demo: [/Users/mohan/casper_web_extension/dummy-site/README.md](/Users/mohan/casper_web_extension/dummy-site/README.md)
 
-## Features
-- Encrypted vault protected by CASPER flow (PIN + secret selection + derived key)
-- Password storage and autofill
-- Save-password prompt on login form submit
-- Authenticator accounts (otpauth URI or manual Base32)
-- Security step-up verification (re-enter PIN) for edit/delete actions
-- EmailJS welcome and breach alert emails
-- Breach test button from Security screen
+## Current Feature Set
+- Encrypted vault with CASPER secret-selection and derived key encryption
+- Password save/update/autofill flows
+- OTP authenticator support (TOTP/HOTP)
+- OTP verify action with grace-window policy
+- PIN step-up verification for sensitive actions
+- Recovery codes generation and regeneration
+- Unlock rate-limit and lockout controls
+- Auth Status card (attempts left + lockout countdown)
+- Decoy generation and honey server registration
+- Breach details modal with event metadata
+- Wrong-password warning handling from dummy login site
+- Welcome/test/breach email paths (EmailJS)
 
-## Email behavior
-EmailJS service/template/public keys are configured in code. Users only provide an alert email.
+## Important Scope Note
+- Direct detection from third-party production backends (for example Instagram servers) is out of scope for extension-only architecture.
+- CASPER demonstrates controlled deception monitoring through honey/dummy endpoints where telemetry is available.
 
-- Welcome email: sent on vault create (if alert email provided) and on first credential save using an email username
-- Breach email: sent on detected breach events and manual breach test
-
-## Project Structure
-- `background/`: runtime core (CASPER crypto, sync, messaging)
-- `content/`: autofill + page security events
-- `popup/`: setup/unlock/quick actions
-- `vault/`: full vault/authenticator/security/settings UI
-
-## Notes
-- If `chrome.storage.sync` quota is exceeded, CASPER falls back to `chrome.storage.local` automatically.
-- Keep your PIN secret; PIN is required for unlock and sensitive operations.
+## Quick Start
+1. Load extension unpacked from `/Users/mohan/casper_web_extension/casper-extension`.
+2. Create vault PIN and save recovery codes.
+3. Configure honey/dummy server URL in Settings.
+4. Add credentials and verify decoy monitoring in Security tab.
+5. Run breach simulation and inspect details.

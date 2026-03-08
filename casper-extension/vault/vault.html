@@ -137,6 +137,34 @@
                   <span class="stat-value" id="lastSync">Never</span>
                   <span class="stat-label">Last Sync</span>
                 </div>
+                <div class="stat">
+                  <span class="stat-value" id="failedUnlocks">0</span>
+                  <span class="stat-label">Failed Unlocks</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="security-card">
+            <div class="card-header">
+              <span class="card-icon">🧭</span>
+              <h3>Auth Status</h3>
+            </div>
+            <div class="card-content">
+              <div class="status-indicator" id="authStatusIndicator">
+                <span class="indicator-dot"></span>
+                <span id="authStatusText">Authentication healthy</span>
+              </div>
+              <p id="authStatusSubtext">No lockout active</p>
+              <div class="vault-stats">
+                <div class="stat">
+                  <span class="stat-value" id="authAttemptsLeft">0</span>
+                  <span class="stat-label">Attempts Left</span>
+                </div>
+                <div class="stat">
+                  <span class="stat-value" id="authLockoutCountdown">0s</span>
+                  <span class="stat-label">Lockout</span>
+                </div>
               </div>
             </div>
           </div>
@@ -160,6 +188,9 @@
           <button class="danger-btn" id="changePinBtn">Change PIN</button>
           <button class="danger-btn" id="breachTestBtn">Trigger Breach Test</button>
           <button class="secondary-btn" id="checkBreachNowBtn">Check Breach Now</button>
+          <button class="secondary-btn" id="openGuidelinesBtn">Security Response Guide</button>
+          <button class="secondary-btn" id="viewBreachDetailsBtn">View Breach Details</button>
+          <button class="secondary-btn" id="showDecoysDevBtn">Show Decoys (Dev)</button>
           <button class="secondary-btn" id="exportVaultBtn">Export Vault</button>
           <button class="secondary-btn" id="viewLogsBtn">View Security Logs</button>
         </div>
@@ -240,6 +271,44 @@
                 <input type="checkbox" id="breachAlerts" checked>
                 <span>Enable breach detection alerts</span>
               </label>
+            </div>
+            <div class="setting-item">
+              <label for="maxUnlockAttempts">Max unlock attempts</label>
+              <select id="maxUnlockAttempts">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="7">7</option>
+                <option value="10">10</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="lockoutMinutes">Lockout duration</label>
+              <select id="lockoutMinutes">
+                <option value="1">1 minute</option>
+                <option value="5" selected>5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="otpDefaultPeriod">Default TOTP validity</label>
+              <select id="otpDefaultPeriod">
+                <option value="30" selected>30 seconds</option>
+                <option value="60">60 seconds</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="otpGraceWindows">OTP grace windows</label>
+              <select id="otpGraceWindows">
+                <option value="0">0</option>
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+            <div class="security-actions">
+              <button class="secondary-btn" id="viewRecoveryCodesBtn">View Recovery Codes</button>
+              <button class="secondary-btn" id="regenerateRecoveryCodesBtn">Regenerate Recovery Codes</button>
             </div>
           </div>
           
@@ -375,6 +444,22 @@
       <div class="modal-footer">
         <button class="secondary-btn" id="cancelModal">Cancel</button>
         <button class="primary-btn" id="saveModal">Save Password</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="breachModalOverlay" style="display: none;">
+    <div class="modal" id="breachDetailsModal">
+      <div class="modal-header">
+        <h3>Breach Details</h3>
+        <button class="close-btn" id="closeBreachModal">×</button>
+      </div>
+      <div class="modal-content">
+        <div id="breachDetailsSummary" class="breach-summary">Loading...</div>
+        <div id="breachDetailsList" class="breach-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="closeBreachModalFooter">Close</button>
       </div>
     </div>
   </div>

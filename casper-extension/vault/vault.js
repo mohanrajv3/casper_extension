@@ -6,8 +6,11 @@ class CasperVault {
     this.searchQuery = '';
     this.otpSearch = '';
     this.refreshTimer = null;
+    this.securityTimer = null;
     this.selectedPasswordId = null;
     this.editingPasswordId = null;
+    this.settings = {};
+    this.authState = { failedUnlocks: 0, lockoutUntil: 0, isLockedOut: false };
 
     this.init();
   }
@@ -96,10 +99,20 @@ class CasperVault {
     });
     document.getElementById('breachTestBtn')?.addEventListener('click', () => this.triggerBreachTest());
     document.getElementById('checkBreachNowBtn')?.addEventListener('click', () => this.checkBreachNow());
+    document.getElementById('openGuidelinesBtn')?.addEventListener('click', () => this.openGuidelines());
+    document.getElementById('viewBreachDetailsBtn')?.addEventListener('click', () => this.viewBreachDetails());
+    document.getElementById('showDecoysDevBtn')?.addEventListener('click', () => this.showDecoysDev());
 
     document.getElementById('exportVaultBtn')?.addEventListener('click', () => this.exportVault());
     document.getElementById('viewLogsBtn')?.addEventListener('click', () => this.viewLogs());
     document.getElementById('testEmailBtn')?.addEventListener('click', () => this.sendTestEmail());
+    document.getElementById('viewRecoveryCodesBtn')?.addEventListener('click', () => this.viewRecoveryCodes());
+    document.getElementById('regenerateRecoveryCodesBtn')?.addEventListener('click', () => this.regenerateRecoveryCodes());
+    document.getElementById('closeBreachModal')?.addEventListener('click', () => this.closeBreachDetailsModal());
+    document.getElementById('closeBreachModalFooter')?.addEventListener('click', () => this.closeBreachDetailsModal());
+    document.getElementById('breachModalOverlay')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closeBreachDetailsModal();
+    });
 
     const saveSettings = () => this.saveSettings();
     [
@@ -108,6 +121,10 @@ class CasperVault {
       'autoFillEnabled',
       'savePrompts',
       'syncEnabled',
+      'maxUnlockAttempts',
+      'lockoutMinutes',
+      'otpDefaultPeriod',
+      'otpGraceWindows',
       'deceptionEnabled',
       'honeyServerUrl',
       'honeyApiKey',
@@ -141,7 +158,12 @@ class CasperVault {
 
     if (section === 'passwords') await this.loadPasswords();
     if (section === 'passkeys') await this.loadOtpAccounts();
-    if (section === 'security') await this.loadSecurity();
+    if (section === 'security') {
+      await this.loadSecurity();
+      this.startSecurityRefresh();
+    } else {
+      this.stopSecurityRefresh();
+    }
     if (section === 'generator') {
       document.getElementById('generatedPassword').value = this.makePassword();
     }
@@ -517,6 +539,16 @@ class CasperVault {
         await navigator.clipboard.writeText(item.code);
         this.toast('OTP copied', 'success');
       }));
+      actions.appendChild(this.iconButton('✅', async () => {
+        const input = window.prompt('Enter OTP code to verify:');
+        if (!input) return;
+        const verify = await this.sendMessage({ type: 'VERIFY_OTP_CODE', id: item.id, code: input });
+        if (!verify.success) {
+          this.toast(verify.message || 'OTP verification failed', 'error');
+          return;
+        }
+        this.toast(verify.message || 'OTP verified', 'success');
+      }));
 
       if (item.type === 'hotp') {
         actions.appendChild(this.iconButton('➕', async () => {
@@ -576,6 +608,7 @@ class CasperVault {
       const secret = window.prompt('Secret (Base32):', '');
       if (!secret) return;
       const type = (window.prompt('Type: totp or hotp', 'totp') || 'totp').toLowerCase();
+      const defaultPeriod = Number(this.settings?.auth?.otpDefaultPeriod || 30) === 60 ? 60 : 30;
 
       account = {
         issuer: issuer.trim() || 'Unknown',
@@ -583,7 +616,7 @@ class CasperVault {
         secret: secret.trim(),
         type: type === 'hotp' ? 'hotp' : 'totp',
         digits: 6,
-        period: 30,
+        period: defaultPeriod,
         algorithm: 'SHA1',
         counter: 0,
       };
@@ -612,10 +645,60 @@ class CasperVault {
     }, 1000);
   }
 
+  startSecurityRefresh() {
+    this.stopSecurityRefresh();
+    this.securityTimer = setInterval(() => {
+      this.updateAuthStatusCard();
+    }, 1000);
+  }
+
+  stopSecurityRefresh() {
+    if (this.securityTimer) {
+      clearInterval(this.securityTimer);
+      this.securityTimer = null;
+    }
+  }
+
+  updateAuthStatusCard() {
+    const indicator = document.getElementById('authStatusIndicator');
+    const text = document.getElementById('authStatusText');
+    const subtext = document.getElementById('authStatusSubtext');
+    const attemptsLeft = document.getElementById('authAttemptsLeft');
+    const countdown = document.getElementById('authLockoutCountdown');
+    if (!indicator || !text || !subtext || !attemptsLeft || !countdown) return;
+
+    const maxAttempts = Number(this.settings?.auth?.maxUnlockAttempts || 5);
+    const failed = Number(this.authState?.failedUnlocks || 0);
+    const remainingAttempts = Math.max(0, maxAttempts - failed);
+    attemptsLeft.textContent = String(remainingAttempts);
+
+    const lockoutUntil = Number(this.authState?.lockoutUntil || 0);
+    const remainingMs = Math.max(0, lockoutUntil - Date.now());
+    const lockoutSec = Math.ceil(remainingMs / 1000);
+    countdown.textContent = lockoutSec > 0 ? `${lockoutSec}s` : '0s';
+
+    if (lockoutSec > 0) {
+      indicator.className = 'status-indicator error';
+      text.textContent = 'Lockout active';
+      subtext.textContent = 'Too many failed attempts. Wait for lockout to expire.';
+      return;
+    }
+    if (remainingAttempts <= 2) {
+      indicator.className = 'status-indicator warning';
+      text.textContent = 'Caution: low attempts left';
+      subtext.textContent = 'Authentication active, but failed attempts are near threshold.';
+      return;
+    }
+    indicator.className = 'status-indicator';
+    text.textContent = 'Authentication healthy';
+    subtext.textContent = 'No lockout active';
+  }
+
   async loadSecurity() {
-    const [response, decoyStatus] = await Promise.all([
+    const [response, decoyStatus, authStatus] = await Promise.all([
       this.sendMessage({ type: 'GET_SECURITY_EVENTS' }),
       this.sendMessage({ type: 'GET_DECOY_STATUS' }),
+      this.sendMessage({ type: 'GET_AUTH_STATUS' }),
     ]);
     if (!response.success) {
       if (response.requiresUnlock) return this.handleLockedSession();
@@ -631,14 +714,26 @@ class CasperVault {
     if (breachIndicator) {
       breachIndicator.className = `status-indicator${breachCount > 0 ? ' error' : ''}`;
     }
+    const latestAlerts = response.data.breachAlerts || [];
+    const hasWrongPasswordWarning = latestAlerts.some((a) => a.type === 'breach_warning');
     if (breachText) {
-      breachText.textContent = breachCount > 0 ? `${breachCount} breach alert${breachCount > 1 ? 's' : ''} detected` : 'No breaches detected';
+      if (hasWrongPasswordWarning) {
+        breachText.textContent = 'Wrong password attempt detected. Follow Security Response Guidelines.';
+        breachText.classList.add('status-text-danger');
+      } else {
+        breachText.textContent = breachCount > 0 ? `${breachCount} breach alert${breachCount > 1 ? 's' : ''} detected` : 'No breaches detected';
+        breachText.classList.toggle('status-text-danger', breachCount > 0);
+      }
     }
     if (breachSubtext) {
-      breachSubtext.textContent =
-        breachCount > 0
-          ? 'Unauthorized decoy usage has been detected. Review security logs immediately.'
-          : 'CASPER is actively monitoring for unauthorized access';
+      if (hasWrongPasswordWarning) {
+        breachSubtext.textContent = 'Potential credential probing detected. Open the guide and complete immediate containment steps.';
+      } else {
+        breachSubtext.textContent =
+          breachCount > 0
+            ? 'Unauthorized decoy usage has been detected. Review security logs immediately.'
+            : 'CASPER is actively monitoring for unauthorized access';
+      }
     }
 
     const trapLabel = document.getElementById('trapKeyCount');
@@ -650,6 +745,14 @@ class CasperVault {
       const d = decoyStatus.data || {};
       decoyLabel.textContent = `Decoys: ${d.monitoredDecoys}/${d.totalDecoys} monitored`;
     }
+    const failedUnlocks = document.getElementById('failedUnlocks');
+    if (failedUnlocks) {
+      failedUnlocks.textContent = authStatus?.success ? String(authStatus.data?.failedUnlocks || 0) : String(response.data.failedUnlocks || 0);
+    }
+    if (authStatus?.success) {
+      this.authState = authStatus.data || this.authState;
+      this.updateAuthStatusCard();
+    }
   }
 
   async loadSettings() {
@@ -659,6 +762,7 @@ class CasperVault {
       return;
     }
     const settings = response.data || {};
+    this.settings = settings;
     this.applySettingsToForm(settings);
   }
 
@@ -681,6 +785,10 @@ class CasperVault {
     setChecked('autoFillEnabled', settings.autoFill !== false);
     setChecked('savePrompts', settings.savePrompts !== false);
     setChecked('syncEnabled', settings.syncEnabled !== false);
+    setValue('maxUnlockAttempts', String(settings.auth?.maxUnlockAttempts || 5));
+    setValue('lockoutMinutes', String(settings.auth?.lockoutMinutes || 5));
+    setValue('otpDefaultPeriod', String(settings.auth?.otpDefaultPeriod || 30));
+    setValue('otpGraceWindows', String(settings.auth?.otpGraceWindows || 1));
     setChecked('deceptionEnabled', settings.deception?.monitoringEnabled !== false);
     setValue('honeyServerUrl', settings.deception?.honeyServerUrl || '');
     setValue('honeyApiKey', settings.deception?.honeyApiKey || '');
@@ -696,6 +804,12 @@ class CasperVault {
       autoFill: Boolean(document.getElementById('autoFillEnabled').checked),
       savePrompts: Boolean(document.getElementById('savePrompts').checked),
       syncEnabled: Boolean(document.getElementById('syncEnabled').checked),
+      auth: {
+        maxUnlockAttempts: Number(document.getElementById('maxUnlockAttempts')?.value || 5),
+        lockoutMinutes: Number(document.getElementById('lockoutMinutes')?.value || 5),
+        otpDefaultPeriod: Number(document.getElementById('otpDefaultPeriod')?.value || 30),
+        otpGraceWindows: Number(document.getElementById('otpGraceWindows')?.value || 1),
+      },
       deception: {
         monitoringEnabled: Boolean(document.getElementById('deceptionEnabled').checked),
         honeyServerUrl: document.getElementById('honeyServerUrl')?.value?.trim() || '',
@@ -735,9 +849,17 @@ class CasperVault {
       return;
     }
     if (response.breach) {
-      this.toast(`Breach detected (${response.eventsCount || 0} events)`, 'error');
+      const wrong = Number(response.authFailureCount || 0);
+      const suffix = wrong > 0 ? ` | Wrong-password attempts: ${wrong}` : '';
+      this.toast(`Breach detected (${response.eventsCount || 0} events)${suffix}`, 'error');
     } else {
-      this.toast('No breach detected', 'success');
+      const existing = Number(response.totalBreachAlerts || 0);
+      const wrong = Number(response.authFailureCount || 0);
+      if (existing > 0 || wrong > 0) {
+        this.toast(`No new breach events. Existing alerts: ${existing}. Wrong-password attempts: ${wrong}`, 'info');
+      } else {
+        this.toast('No breach detected', 'success');
+      }
     }
     await this.loadSecurity();
   }
@@ -796,6 +918,84 @@ class CasperVault {
     window.alert(top.length ? top.join('\n') : 'No security events recorded yet.');
   }
 
+  async viewBreachDetails() {
+    const response = await this.sendMessage({ type: 'GET_SECURITY_EVENTS' });
+    if (!response.success) {
+      if (response.requiresUnlock) return this.handleLockedSession();
+      this.toast(response.message || 'Could not load breach details', 'error');
+      return;
+    }
+    const alerts = response.data?.breachAlerts || [];
+    const summary = document.getElementById('breachDetailsSummary');
+    const list = document.getElementById('breachDetailsList');
+    const overlay = document.getElementById('breachModalOverlay');
+    if (!summary || !list || !overlay) return;
+
+    summary.textContent = alerts.length
+      ? `Total alerts: ${alerts.length}. Showing latest ${Math.min(alerts.length, 50)}.`
+      : 'No breach alerts recorded.';
+    list.innerHTML = '';
+
+    alerts.slice(0, 50).forEach((evt) => {
+      const row = document.createElement('div');
+      row.className = 'breach-row';
+      const when = new Date(evt.timestamp || Date.now()).toLocaleString();
+      const details = evt.details || {};
+      row.innerHTML = `
+        <div><strong>${evt.message || 'Breach alert'}</strong></div>
+        <div><small>Time: ${when}</small></div>
+        <div><small>Decoy ID: ${details.decoyId || 'N/A'}</small></div>
+        <div><small>Service: ${details.service || details.url || 'N/A'}</small></div>
+        <div><small>IP: ${details.ipAddress || 'N/A'}</small></div>
+        <div><small>Source: ${details.source || 'N/A'}</small></div>
+      `;
+      list.appendChild(row);
+    });
+
+    overlay.style.display = 'flex';
+  }
+
+  closeBreachDetailsModal() {
+    const overlay = document.getElementById('breachModalOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  openGuidelines() {
+    window.open(chrome.runtime.getURL('vault/security-guidelines.html'), '_blank', 'noopener');
+  }
+
+  async showDecoysDev() {
+    const proceed = window.confirm(
+      'Developer mode: this will display plaintext decoy credentials for demo/testing. Continue?'
+    );
+    if (!proceed) return;
+    const verified = await this.verifySensitiveAction('show_decoys_dev');
+    if (!verified) return;
+    const response = await this.sendMessage({ type: 'GET_DECOY_CREDENTIALS_DEV' });
+    if (!response.success) {
+      if (String(response.message || '').toLowerCase().includes('unknown message type')) {
+        this.toast('Extension updated. Reload extension and reopen vault tab.', 'error');
+        return;
+      }
+      if (response.requiresVerification) {
+        this.toast('PIN verification required', 'error');
+        return;
+      }
+      this.toast(response.message || 'Failed to load decoys', 'error');
+      return;
+    }
+    const decoys = response.data || [];
+    if (!decoys.length) {
+      window.alert('No decoys generated yet.');
+      return;
+    }
+    const lines = decoys.slice(0, 30).map((d, idx) =>
+      `${idx + 1}. [${d.serviceName}] ${d.username} / ${d.password} (${d.monitoringStatus ? 'monitored' : 'pending'})`
+    );
+    const suffix = decoys.length > 30 ? `\n\n...and ${decoys.length - 30} more` : '';
+    window.alert(`Decoy credentials (developer view):\n\n${lines.join('\n')}${suffix}`);
+  }
+
   async triggerBreachTest() {
     const ok = window.confirm('Send a breach alert test email now?');
     if (!ok) return;
@@ -808,6 +1008,36 @@ class CasperVault {
     const tone = response.emailSent ? 'success' : 'info';
     this.toast(response.message || 'Breach test completed.', tone);
     await this.loadSecurity();
+  }
+
+  async viewRecoveryCodes() {
+    const verified = await this.verifySensitiveAction('view_recovery_codes');
+    if (!verified) return;
+    const response = await this.sendMessage({ type: 'GET_RECOVERY_CODES' });
+    if (!response.success) {
+      if (response.requiresVerification) {
+        this.toast('PIN verification required', 'error');
+        return;
+      }
+      this.toast(response.message || 'Failed to load recovery codes', 'error');
+      return;
+    }
+    const codes = response.data?.recoveryCodes || [];
+    window.alert(`Recovery codes (store safely):\n\n${codes.join('\n')}`);
+  }
+
+  async regenerateRecoveryCodes() {
+    if (!window.confirm('Regenerate recovery codes? Previous codes will stop working.')) return;
+    const verified = await this.verifySensitiveAction('regenerate_recovery_codes');
+    if (!verified) return;
+    const response = await this.sendMessage({ type: 'REGENERATE_RECOVERY_CODES' });
+    if (!response.success) {
+      this.toast(response.message || 'Failed to regenerate recovery codes', 'error');
+      return;
+    }
+    const codes = response.data?.recoveryCodes || [];
+    window.alert(`New recovery codes:\n\n${codes.join('\n')}`);
+    this.toast('Recovery codes regenerated', 'success');
   }
 
   async lockVault() {

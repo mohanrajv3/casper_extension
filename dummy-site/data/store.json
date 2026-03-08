@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "created_at": 1772963200221,
+  "users": [
+    {
+      "id": "demo-user",
+      "username": "demo.user",
+      "password_hash": "c247c5761c4ba6f06ecd9e56fb26d73648964175f686a240a5065e3071b0a87f",
+      "service_name": "dummy-auth.local",
+      "created_at": 1772963200221
+    },
+    {
+      "id": "09492329a9f0985c",
+      "username": "mohanrajv.agn21@gmail.com",
+      "password_hash": "6a8a7daff50dc4bb585b540e439b8dc931df708b42d6102af18c4badc58aba79",
+      "service_name": "127.0.0.1",
+      "created_at": 1772964270463
+    },
+    {
+      "id": "0e07f6eed9afda25",
+      "username": "mohanrajv",
+      "password_hash": "6a8a7daff50dc4bb585b540e439b8dc931df708b42d6102af18c4badc58aba79",
+      "service_name": "127.0.0.1",
+      "created_at": 1772964312769
+    },
+    {
+      "id": "a73a5e037d56e43e",
+      "username": "mohanraj",
+      "password_hash": "6a8a7daff50dc4bb585b540e439b8dc931df708b42d6102af18c4badc58aba79",
+      "service_name": "127.0.0.1",
+      "created_at": 1772964334102
+    },
+    {
+      "id": "65abd9640c167e7b",
+      "username": "mohan",
+      "password_hash": "6a8a7daff50dc4bb585b540e439b8dc931df708b42d6102af18c4badc58aba79",
+      "service_name": "127.0.0.1",
+      "created_at": 1772964474859
+    }
+  ],
+  "decoys": [],
+  "alerts": [
+    {
+      "id": "699680d4b762fb1b",
+      "timestamp": 1772964823209,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "5d4083f24c5cd9ae",
+      "timestamp": 1772964809509,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "551ee48c1c4afa95",
+      "timestamp": 1772964805776,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "780dfc3444001f77",
+      "timestamp": 1772964779592,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "8d3a2a55affb56c1",
+      "timestamp": 1772964779209,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "5d762dd5cbf3e6fe",
+      "timestamp": 1772964776494,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "374be48e2306eeb4",
+      "timestamp": 1772964766745,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "c9c0675078c4a587",
+      "timestamp": 1772964543194,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohan",
+      "service_name": "127.0.0.1",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "5d6d13a35d888f7b",
+      "timestamp": 1772963915701,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "6db6dcce9001dd8d",
+      "timestamp": 1772963870999,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "4ce1234e66797b14",
+      "timestamp": 1772963850417,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "d79cfbf709aa5e26",
+      "timestamp": 1772963415707,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "demo.user",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "39c68bd2d19dabad",
+      "timestamp": 1772963313954,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "49c1eb3d2bc3c67c",
+      "timestamp": 1772963296870,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "6e721d0e1d8d644a",
+      "timestamp": 1772963286905,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "9571dd1bf215a5b3",
+      "timestamp": 1772963277945,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv.agn21@gmail.com",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FitNest - Register</title>
+  <link rel="stylesheet" href="/site/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">FitNest</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/workouts">Workouts</a>
+      <a href="/login">Login</a>
+      <a href="/register" class="active">Register</a>
+    </nav>
+  </header>
+
+  <main class="page narrow">
+    <form id="registerForm" class="card">
+      <h1>Create Account</h1>
+      <p class="muted">Submit to create a real account. CASPER should prompt to save credentials.</p>
+
+      <input id="regService" type="hidden" />
+
+      <label>Username</label>
+      <input id="regUsername" type="text" placeholder="new.user" required />
+
+      <label>Password</label>
+      <input id="regPassword" type="password" placeholder="Create password" required />
+
+      <button type="submit">Create Account</button>
+      <p id="registerResult" class="result"></p>
+    </form>
+  </main>
+
+  <script src="/site/app.js"></script>
+</body>
+</html>

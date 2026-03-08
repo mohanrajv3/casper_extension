@@ -422,6 +422,11 @@ body {
   background: #ef4444;
 }
 
+.status-text-danger {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
 .vault-stats {
   display: flex;
   gap: 24px;
@@ -742,6 +747,32 @@ body {
   gap: 12px;
   justify-content: flex-end;
   padding: 0 24px 24px;
+}
+
+.breach-summary {
+  margin-bottom: 12px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.breach-list {
+  display: grid;
+  gap: 10px;
+}
+
+.breach-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.breach-row strong {
+  color: #0f172a;
+}
+
+.breach-row small {
+  color: #64748b;
 }
 
 /* Responsive Design */

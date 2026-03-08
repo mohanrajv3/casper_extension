@@ -20,6 +20,11 @@ class CasperAutofill {
     this.scanForms();
     this.observeMutations();
     this.listenForMessages();
+    this.listenForDemoAuthEvents();
+  }
+
+  isDummyDemoSite() {
+    return window.location.hostname === '127.0.0.1' && window.location.port === '8790';
   }
 
   scanForms() {
@@ -40,25 +45,29 @@ class CasperAutofill {
 
       if (!form.dataset.casperBound) {
         form.dataset.casperBound = '1';
-        form.addEventListener('submit', () => this.captureSubmittedCredentials(pair, form), true);
-        form.addEventListener('click', (event) => {
-          const target = event.target;
-          if (
-            target instanceof HTMLElement &&
-            target.closest('button[type="submit"], input[type="submit"], button[id*="login" i], button[class*="login" i]')
-          ) {
-            this.captureSubmittedCredentials(pair, form);
-          }
-        }, true);
+        if (!this.isDummyDemoSite()) {
+          form.addEventListener('submit', () => this.captureSubmittedCredentials(pair, form), true);
+          form.addEventListener('click', (event) => {
+            const target = event.target;
+            if (
+              target instanceof HTMLElement &&
+              target.closest('button[type="submit"], input[type="submit"], button[id*="login" i], button[class*="login" i]')
+            ) {
+              this.captureSubmittedCredentials(pair, form);
+            }
+          }, true);
+        }
       }
 
       if (!passwordField.dataset.casperEnterBound) {
         passwordField.dataset.casperEnterBound = '1';
-        passwordField.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter') {
-            this.captureSubmittedCredentials(pair, form);
-          }
-        });
+        if (!this.isDummyDemoSite()) {
+          passwordField.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              this.captureSubmittedCredentials(pair, form);
+            }
+          });
+        }
       }
     });
 
@@ -142,7 +151,10 @@ class CasperAutofill {
     const { username, password } = this.extractSubmittedCredentials(pair, form);
     if (!username || !password) return;
     if (!this.shouldPrompt(username, password)) return;
+    await this.maybePromptAndSaveCredential(username, password);
+  }
 
+  async maybePromptAndSaveCredential(username, password) {
     try {
       const settings = await this.getSettings();
       if (settings && settings.savePrompts === false) return;
@@ -152,13 +164,23 @@ class CasperAutofill {
         this.notify('Unlock CASPER to save this password', 'warn');
         return;
       }
-      const exists = current?.success && current.data?.some((row) => row.username === username);
-      if (exists) return;
+      const existing = current?.success
+        ? (current.data || []).find((row) => row.username === username)
+        : null;
+      if (existing && String(existing.password || '') === String(password || '')) {
+        return;
+      }
 
-      const shouldSave = window.confirm(`Save password for ${window.location.hostname}?`);
-      if (!shouldSave) return;
-
-      await this.sendMessage({
+      if (existing) {
+        const shouldUpdate = window.confirm(
+          `A saved credential already exists for ${window.location.hostname} and ${username}.\nUpdate password?`
+        );
+        if (!shouldUpdate) return;
+      } else {
+        const shouldSave = window.confirm(`Save password for ${window.location.hostname}?`);
+        if (!shouldSave) return;
+      }
+      const saveResult = await this.sendMessage({
         type: 'SAVE_CREDENTIALS',
         credentials: {
           username,
@@ -167,11 +189,46 @@ class CasperAutofill {
           title: document.title,
         },
       });
+      if (!saveResult?.success) {
+        this.notify(saveResult?.message || 'Could not save credentials', 'err');
+        return;
+      }
+      this.notify(existing ? 'Password updated in CASPER' : 'Password saved to CASPER', 'ok');
       this.lastPromptSignature = `${window.location.hostname}|${username}|${password}`;
       this.lastPromptAt = Date.now();
-    } catch {
-      // Keep form submission path resilient; ignore extension errors.
+    } catch (error) {
+      if (this.isContextInvalidatedError(error)) {
+        this.notify('Extension updated. Reload this tab, then retry save.', 'warn');
+        return;
+      }
+      this.notify(`Save prompt failed: ${error.message}`, 'err');
     }
+  }
+
+  listenForDemoAuthEvents() {
+    window.addEventListener('casper-auth-success', (event) => {
+      const detail = event?.detail || {};
+      const username = String(detail.username || '').trim();
+      const password = String(detail.password || '');
+      if (!username || !password) return;
+      if (!this.shouldPrompt(username, password)) return;
+      this.maybePromptAndSaveCredential(username, password).catch(() => {});
+    });
+
+    window.addEventListener('casper-auth-failure', (event) => {
+      const detail = event?.detail || {};
+      this.sendMessage({
+        type: 'SECURITY_EVENT',
+        event: {
+          type: 'auth_failure',
+          service: detail.service_name || window.location.hostname,
+          username: detail.username || '',
+          reason: detail.reason || 'invalid_credentials',
+          source: 'dummy_site',
+          at: Date.now(),
+        },
+      }).catch(() => {});
+    });
   }
 
   shouldPrompt(username, password) {

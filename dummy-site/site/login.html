@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FitNest - Login</title>
+  <link rel="stylesheet" href="/site/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">FitNest</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/workouts">Workouts</a>
+      <a href="/login" class="active">Login</a>
+      <a href="/register">Register</a>
+    </nav>
+  </header>
+
+  <main class="page narrow">
+    <form id="loginForm" class="card">
+      <h1>Login</h1>
+      <p class="muted">Use this to demo normal and wrong-password login events.</p>
+
+      <input id="service" type="hidden" />
+
+      <label>Username</label>
+      <input id="username" type="text" placeholder="demo.user" required />
+
+      <label>Password</label>
+      <input id="password" type="password" placeholder="Enter password" required />
+
+      <button type="submit">Sign In</button>
+      <p id="result" class="result"></p>
+      <p class="muted tiny">Demo account: <strong>demo.user / DemoPass@123</strong></p>
+    </form>
+  </main>
+
+  <script src="/site/app.js"></script>
+</body>
+</html>

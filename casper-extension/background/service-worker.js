@@ -28,6 +28,12 @@ const DEFAULT_SETTINGS = {
   autoLockMinutes: 5,
   breachAlerts: true,
   syncEnabled: true,
+  auth: {
+    maxUnlockAttempts: 5,
+    lockoutMinutes: 5,
+    otpDefaultPeriod: 30,
+    otpGraceWindows: 1,
+  },
   deception: {
     monitoringEnabled: true,
     honeyServerUrl: '',
@@ -43,6 +49,9 @@ const DEFAULT_SETTINGS = {
     toEmail: '',
   },
 };
+
+const RECOVERY_CODE_COUNT = 8;
+const RECOVERY_CODE_BYTES = 5;
 
 function now() {
   return Date.now();
@@ -76,6 +85,51 @@ async function sha256Hex(input) {
   const digest = await crypto.subtle.digest('SHA-256', data);
   const bytes = new Uint8Array(digest);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function randomRecoveryCode() {
+  const bytes = new Uint8Array(RECOVERY_CODE_BYTES);
+  crypto.getRandomValues(bytes);
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return `${out.slice(0, 5)}-${out.slice(5)}`;
+}
+
+async function generateRecoveryCodeBundle(count = RECOVERY_CODE_COUNT) {
+  const plaintext = [];
+  const hashes = [];
+  for (let i = 0; i < count; i++) {
+    const code = randomRecoveryCode();
+    plaintext.push(code);
+    hashes.push(await sha256Hex(code));
+  }
+  return { plaintext, hashes };
+}
+
+function isOffHours(ts = now()) {
+  const hour = new Date(ts).getHours();
+  return hour < 6 || hour >= 23;
+}
+
+async function addRiskEvent(kind, details = {}) {
+  if (!session.vaultData) return;
+  const event = {
+    id: makeId(8),
+    type: 'risk_signal',
+    message: `Risk signal: ${kind}`,
+    severity: 'MEDIUM',
+    details: {
+      kind,
+      ...details,
+    },
+    timestamp: now(),
+  };
+  session.vaultData.security.events.unshift(event);
+  session.vaultData.security.events = session.vaultData.security.events.slice(0, 200);
+  await persistVault();
 }
 
 function makeDecoyVariants(username, password, count) {
@@ -116,6 +170,7 @@ async function registerDecoysWithHoneyServer(decoys, serviceName) {
           ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
         },
         body: JSON.stringify({
+          user_id: session.userId || 'default',
           decoy_id: decoy.decoyId,
           username: decoy.username,
           password_hash: passwordHash,
@@ -153,6 +208,9 @@ async function checkHoneyServerForBreach() {
 
   const monitoredDecoys = (session.vaultData.decoyCredentials || []).filter((d) => d.monitoringStatus);
   if (!monitoredDecoys.length) return { success: true, breach: false };
+  const monitoredServices = Array.from(
+    new Set((session.vaultData.passwords || []).map((p) => p.domain).filter(Boolean))
+  );
 
   try {
     const resp = await fetch(`${baseUrl}/decoy/check`, {
@@ -162,7 +220,10 @@ async function checkHoneyServerForBreach() {
         ...(settings.honeyApiKey ? { Authorization: `Bearer ${settings.honeyApiKey}` } : {}),
       },
       body: JSON.stringify({
+        user_id: session.userId || 'default',
         decoy_ids: monitoredDecoys.map((d) => d.decoyId),
+        monitor_services: monitoredServices,
+        include_auth_failures: true,
         last_checked_at: session.vaultData.security?.lastHoneyCheckAt || 0,
       }),
     });
@@ -189,13 +250,41 @@ async function checkHoneyServerForBreach() {
     await persistVault();
 
     if (!breachDetected) {
-      return { success: true, breach: false, emailSentCount: 0, emailFailedCount: 0 };
+      const authFailureCount = events.filter((e) => String(e.event_type || '').startsWith('wrong_password')).length;
+      for (const evt of events) {
+        if (!String(evt.event_type || '').startsWith('wrong_password')) continue;
+        addSecurityEvent('risk_auth_failure', 'Wrong-password attempt observed on monitored service', {
+          service: evt.service_name || 'unknown',
+          username: evt.username || 'unknown',
+          ipAddress: evt.ip_address || evt.ip || 'unknown',
+          eventType: evt.event_type || 'wrong_password',
+          source: 'dummy_site',
+          timestamp: evt.timestamp || new Date().toISOString(),
+        });
+      }
+      if (authFailureCount > 0) await persistVault();
+      return { success: true, breach: false, emailSentCount: 0, emailFailedCount: 0, authFailureCount };
     }
 
     let emailSentCount = 0;
     let emailFailedCount = 0;
+    let authFailureCount = 0;
 
     for (const evt of events) {
+      const eventType = String(evt.event_type || '');
+      if (eventType.startsWith('wrong_password')) {
+        authFailureCount += 1;
+        addSecurityEvent('risk_auth_failure', 'Wrong-password attempt observed on monitored service', {
+          service: evt.service_name || 'unknown',
+          username: evt.username || 'unknown',
+          ipAddress: evt.ip_address || evt.ip || 'unknown',
+          eventType,
+          source: 'dummy_site',
+          timestamp: evt.timestamp || new Date().toISOString(),
+        });
+        continue;
+      }
+
       const alertEvent = {
         id: makeId(8),
         type: 'breach_detected',
@@ -223,7 +312,14 @@ async function checkHoneyServerForBreach() {
       }
     }
 
-    return { success: true, breach: true, eventsCount: events.length, emailSentCount, emailFailedCount };
+    return {
+      success: true,
+      breach: true,
+      eventsCount: events.filter((e) => !String(e.event_type || '').startsWith('wrong_password')).length,
+      emailSentCount,
+      emailFailedCount,
+      authFailureCount,
+    };
   } catch (error) {
     return { success: false, message: error.message };
   }
@@ -287,6 +383,10 @@ function normalizeVault(vault) {
       events: Array.isArray(vault.security?.events) ? vault.security.events : [],
       breachAlerts: Array.isArray(vault.security?.breachAlerts) ? vault.security.breachAlerts : [],
       failedUnlocks: Number(vault.security?.failedUnlocks || 0),
+      lockoutUntil: Number(vault.security?.lockoutUntil || 0),
+      recoveryCodeHashes: Array.isArray(vault.security?.recoveryCodeHashes) ? vault.security.recoveryCodeHashes : [],
+      usedRecoveryCodeHashes: Array.isArray(vault.security?.usedRecoveryCodeHashes) ? vault.security.usedRecoveryCodeHashes : [],
+      lastHoneyCheckAt: Number(vault.security?.lastHoneyCheckAt || 0),
     },
   };
 }
@@ -323,6 +423,24 @@ async function loadCloud() {
 
 async function saveCloud(cloudData) {
   await sync.saveCloudData(cloudData);
+}
+
+async function getLocalUnlockState() {
+  const data = await chrome.storage.local.get(['authUnlockState']);
+  return data.authUnlockState || { failedUnlocks: 0, lockoutUntil: 0 };
+}
+
+async function setLocalUnlockState(state) {
+  await chrome.storage.local.set({ authUnlockState: state });
+}
+
+async function getLocalAuthPolicy() {
+  const data = await chrome.storage.local.get(['authPolicy']);
+  const policy = data.authPolicy || {};
+  return {
+    maxUnlockAttempts: Math.max(3, Number(policy.maxUnlockAttempts || DEFAULT_SETTINGS.auth.maxUnlockAttempts)),
+    lockoutMinutes: Math.max(1, Number(policy.lockoutMinutes || DEFAULT_SETTINGS.auth.lockoutMinutes)),
+  };
 }
 
 async function persistVault() {
@@ -441,6 +559,7 @@ async function initializeVault(pin, alertEmail = '') {
     return { success: false, message: 'PIN must be 4-6 digits' };
   }
 
+  const recoveryCodes = await generateRecoveryCodeBundle();
   const detectionSecrets = core.generateDetectionSecrets();
   const salt = core.generateSalt();
   const selectorSalt = core.generateSelectorSalt();
@@ -463,7 +582,15 @@ async function initializeVault(pin, alertEmail = '') {
         toEmail: String(alertEmail || '').trim(),
       },
     },
-    security: { events: [], breachAlerts: [], failedUnlocks: 0 },
+    security: {
+      events: [],
+      breachAlerts: [],
+      failedUnlocks: 0,
+      lockoutUntil: 0,
+      recoveryCodeHashes: recoveryCodes.hashes,
+      usedRecoveryCodeHashes: [],
+      lastHoneyCheckAt: 0,
+    },
   });
 
   const encryptedVault = await core.encryptJson(vault, encryptionKey);
@@ -489,6 +616,13 @@ async function initializeVault(pin, alertEmail = '') {
   };
 
   await saveCloud(cloudData);
+  await setLocalUnlockState({ failedUnlocks: 0, lockoutUntil: 0 });
+  await chrome.storage.local.set({
+    authPolicy: {
+      maxUnlockAttempts: DEFAULT_SETTINGS.auth.maxUnlockAttempts,
+      lockoutMinutes: DEFAULT_SETTINGS.auth.lockoutMinutes,
+    },
+  });
 
   session.userId = cloudData.userId;
   session.key = encryptionKey;
@@ -502,12 +636,24 @@ async function initializeVault(pin, alertEmail = '') {
   await sendWelcomeEmailIfConfigured(vault.settings.mailService.toEmail);
   startBreachPolling();
 
-  return { success: true, message: 'Vault initialized' };
+  return {
+    success: true,
+    message: 'Vault initialized',
+    data: {
+      recoveryCodes: recoveryCodes.plaintext,
+    },
+  };
 }
 
 async function unlockVault(pin) {
   if (!/^\d{4,6}$/.test(String(pin || ''))) {
     return { success: false, message: 'PIN must be 4-6 digits' };
+  }
+
+  const unlockState = await getLocalUnlockState();
+  if (Number(unlockState.lockoutUntil || 0) > now()) {
+    const seconds = Math.ceil((unlockState.lockoutUntil - now()) / 1000);
+    return { success: false, message: `Too many attempts. Try again in ${seconds}s.` };
   }
 
   const cloudData = await loadCloud();
@@ -534,7 +680,17 @@ async function unlockVault(pin) {
     cloudData.security.accessCount = Number(cloudData.security.accessCount || 0) + 1;
     await saveCloud(cloudData);
 
+    await setLocalUnlockState({ failedUnlocks: 0, lockoutUntil: 0 });
+    await chrome.storage.local.set({
+      authPolicy: {
+        maxUnlockAttempts: Number(decryptedVault.settings?.auth?.maxUnlockAttempts || DEFAULT_SETTINGS.auth.maxUnlockAttempts),
+        lockoutMinutes: Number(decryptedVault.settings?.auth?.lockoutMinutes || DEFAULT_SETTINGS.auth.lockoutMinutes),
+      },
+    });
     addSecurityEvent('vault_unlocked', 'Vault unlocked');
+    if (isOffHours()) {
+      await addRiskEvent('off_hours_unlock', { localHour: new Date().getHours() });
+    }
     await persistVault();
     startBreachPolling();
 
@@ -547,6 +703,16 @@ async function unlockVault(pin) {
       },
     };
   } catch (error) {
+    const policy = await getLocalAuthPolicy();
+    const failed = Number(unlockState.failedUnlocks || 0) + 1;
+    const locked = failed >= policy.maxUnlockAttempts;
+    await setLocalUnlockState({
+      failedUnlocks: failed,
+      lockoutUntil: locked ? now() + policy.lockoutMinutes * 60 * 1000 : 0,
+    });
+    if (locked) {
+      return { success: false, message: `Too many attempts. Locked for ${policy.lockoutMinutes} minute(s).` };
+    }
     return { success: false, message: 'Invalid PIN or corrupted vault' };
   }
 }
@@ -822,10 +988,13 @@ function generatePassword(options = {}) {
   };
 }
 
-function validateOtpAccount(account) {
+function validateOtpAccount(account, authSettings = DEFAULT_SETTINGS.auth) {
   const type = (account.type || 'totp').toLowerCase();
   if (!['totp', 'hotp'].includes(type)) throw new Error('OTP type must be totp or hotp');
   if (!account.secret) throw new Error('OTP secret is required');
+  const defaultPeriod = Number(authSettings.otpDefaultPeriod) === 60 ? 60 : 30;
+  const requestedPeriod = Number(account.period || defaultPeriod);
+  const period = requestedPeriod === 60 ? 60 : 30;
 
   return {
     id: makeId(8),
@@ -835,7 +1004,7 @@ function validateOtpAccount(account) {
     secret: core.normalizeBase32(String(account.secret)),
     algorithm: String(account.algorithm || 'SHA1').toUpperCase(),
     digits: Number(account.digits || 6),
-    period: Number(account.period || 30),
+    period,
     counter: Number(account.counter || 0),
     createdAt: now(),
     updatedAt: now(),
@@ -849,7 +1018,7 @@ async function addOtpAccount(payload) {
     ? core.parseOtpAuthUri(String(payload.otpauthUrl))
     : payload;
 
-  const normalized = validateOtpAccount(account);
+  const normalized = validateOtpAccount(account, session.vaultData.settings?.auth || DEFAULT_SETTINGS.auth);
 
   const duplicate = session.vaultData.otpAccounts.find(
     (a) => a.issuer === normalized.issuer && a.label === normalized.label && a.type === normalized.type
@@ -926,6 +1095,44 @@ async function getOtpCodes() {
   return { success: true, data: list };
 }
 
+async function verifyOtpCode(id, code) {
+  requireUnlocked();
+  const account = session.vaultData.otpAccounts.find((a) => a.id === id);
+  if (!account) return { success: false, message: 'OTP account not found' };
+  const candidate = String(code || '').trim();
+  if (!/^\d{6,8}$/.test(candidate)) return { success: false, message: 'OTP format invalid' };
+
+  if (account.type === 'hotp') {
+    const current = await core.generateOtpCode(account, now());
+    const success = current.code === candidate;
+    addSecurityEvent('otp_verify', success ? 'HOTP verified' : 'HOTP verification failed', {
+      issuer: account.issuer,
+      label: account.label,
+    });
+    await persistVault();
+    return { success, message: success ? 'HOTP verified' : 'Invalid HOTP code' };
+  }
+
+  const grace = Math.max(0, Math.min(3, Number(session.vaultData.settings?.auth?.otpGraceWindows || 1)));
+  const stepSec = Number(account.period || 30);
+  let match = false;
+  for (let offset = -grace; offset <= grace; offset++) {
+    const at = now() + offset * stepSec * 1000;
+    const generated = await core.generateOtpCode(account, at);
+    if (generated.code === candidate) {
+      match = true;
+      break;
+    }
+  }
+  addSecurityEvent('otp_verify', match ? 'TOTP verified' : 'TOTP verification failed', {
+    issuer: account.issuer,
+    label: account.label,
+    graceWindows: grace,
+  });
+  await persistVault();
+  return { success: match, message: match ? 'TOTP verified' : 'Invalid TOTP code' };
+}
+
 async function updateSettings(settings) {
   requireUnlocked();
   const nextMail = {
@@ -936,22 +1143,38 @@ async function updateSettings(settings) {
     ...session.vaultData.settings.deception,
     ...(settings.deception || {}),
   };
+  const nextAuth = {
+    ...session.vaultData.settings.auth,
+    ...(settings.auth || {}),
+  };
+  nextAuth.maxUnlockAttempts = Math.max(3, Math.min(10, Number(nextAuth.maxUnlockAttempts || 5)));
+  nextAuth.lockoutMinutes = Math.max(1, Math.min(60, Number(nextAuth.lockoutMinutes || 5)));
+  nextAuth.otpDefaultPeriod = Number(nextAuth.otpDefaultPeriod) === 60 ? 60 : 30;
+  nextAuth.otpGraceWindows = Math.max(0, Math.min(3, Number(nextAuth.otpGraceWindows || 1)));
   nextDeception.decoyCount = Math.max(1, Math.min(5, Number(nextDeception.decoyCount || 3)));
   nextDeception.pollIntervalSeconds = Math.max(30, Number(nextDeception.pollIntervalSeconds || 60));
   nextDeception.honeyServerUrl = String(nextDeception.honeyServerUrl || '').trim();
   nextDeception.honeyApiKey = String(nextDeception.honeyApiKey || '').trim();
   delete settings.mailService;
   delete settings.alertEmail;
+  delete settings.auth;
   delete settings.deception;
 
   session.vaultData.settings = {
     ...session.vaultData.settings,
     ...settings,
+    auth: nextAuth,
     deception: nextDeception,
     mailService: nextMail,
   };
   addSecurityEvent('settings_updated', 'Settings updated');
   await persistVault();
+  await chrome.storage.local.set({
+    authPolicy: {
+      maxUnlockAttempts: nextAuth.maxUnlockAttempts,
+      lockoutMinutes: nextAuth.lockoutMinutes,
+    },
+  });
   startBreachPolling();
   return { success: true, data: session.vaultData.settings };
 }
@@ -1002,6 +1225,44 @@ async function sendTestEmail(payload = {}) {
     await persistVault();
     return { success: false, message: error.message };
   }
+}
+
+async function getRecoveryCodes() {
+  requireUnlocked();
+  if (!hasSensitiveVerification()) {
+    return { success: false, message: 'Sensitive verification required', requiresVerification: true };
+  }
+  const bundle = await generateRecoveryCodeBundle();
+  session.vaultData.security.recoveryCodeHashes = bundle.hashes;
+  session.vaultData.security.usedRecoveryCodeHashes = [];
+  addSecurityEvent('recovery_codes_viewed', 'Recovery codes regenerated and viewed');
+  await persistVault();
+  return { success: true, data: { recoveryCodes: bundle.plaintext } };
+}
+
+async function regenerateRecoveryCodes() {
+  requireUnlocked();
+  if (!hasSensitiveVerification()) {
+    return { success: false, message: 'Sensitive verification required', requiresVerification: true };
+  }
+  const bundle = await generateRecoveryCodeBundle();
+  session.vaultData.security.recoveryCodeHashes = bundle.hashes;
+  session.vaultData.security.usedRecoveryCodeHashes = [];
+  addSecurityEvent('recovery_codes_regenerated', 'Recovery codes regenerated');
+  await persistVault();
+  return { success: true, data: { recoveryCodes: bundle.plaintext } };
+}
+
+async function getAuthStatus() {
+  const state = await getLocalUnlockState();
+  return {
+    success: true,
+    data: {
+      failedUnlocks: Number(state.failedUnlocks || 0),
+      lockoutUntil: Number(state.lockoutUntil || 0),
+      isLockedOut: Number(state.lockoutUntil || 0) > now(),
+    },
+  };
 }
 
 async function checkBreach(publicKeyB64, context = {}) {
@@ -1142,20 +1403,50 @@ async function getDecoyStatus() {
   };
 }
 
+async function getDecoyCredentialsDev() {
+  requireUnlocked();
+  if (!hasSensitiveVerification()) {
+    return { success: false, message: 'Sensitive verification required', requiresVerification: true };
+  }
+  const decoys = (session.vaultData.decoyCredentials || []).map((d) => ({
+    decoyId: d.decoyId,
+    parentCredentialId: d.parentCredentialId,
+    serviceName: d.serviceName,
+    username: d.username,
+    password: d.password,
+    monitoringStatus: Boolean(d.monitoringStatus),
+    createdAt: d.createdAt,
+    registeredAt: d.registeredAt,
+  }));
+  return { success: true, data: decoys };
+}
+
 async function checkBreachNow() {
   requireUnlocked();
   const result = await checkHoneyServerForBreach();
   if (!result.success) return { success: false, message: result.message || 'Breach check failed', details: result.details };
-  return { success: true, breach: Boolean(result.breach), eventsCount: result.eventsCount || 0 };
+  return {
+    success: true,
+    breach: Boolean(result.breach),
+    eventsCount: result.eventsCount || 0,
+    authFailureCount: result.authFailureCount || 0,
+    totalBreachAlerts: Array.isArray(session.vaultData?.security?.breachAlerts)
+      ? session.vaultData.security.breachAlerts.length
+      : 0,
+  };
 }
 
 async function getSecurityEvents() {
   requireUnlocked();
+  const authState = await getLocalUnlockState();
   return {
     success: true,
     data: {
       events: session.vaultData.security.events,
       breachAlerts: session.vaultData.security.breachAlerts,
+      failedUnlocks: Number(authState.failedUnlocks || 0),
+      lockoutUntil: Number(authState.lockoutUntil || 0),
+      recoveryCodesAvailable: (session.vaultData.security.recoveryCodeHashes || []).length,
     },
   };
 }
@@ -1163,7 +1454,43 @@ async function getSecurityEvents() {
 async function ingestSecurityEvent(event) {
   requireUnlocked();
   if (!event?.type) return { success: false, message: 'Invalid security event' };
+  if (event.type === 'auth_failure' && String(event.source || '') === 'dummy_site') {
+    addSecurityEvent('risk_auth_failure', 'Wrong-password attempt reported by dummy site', {
+      service: event.service || 'unknown',
+      username: event.username || 'unknown',
+      reason: event.reason || 'invalid_credentials',
+      source: 'dummy_site',
+    });
+    const warning = {
+      id: makeId(8),
+      type: 'breach_warning',
+      message: 'Wrong-password activity detected on monitored login page',
+      severity: 'WARNING',
+      details: {
+        service: event.service || 'unknown',
+        username: event.username || 'unknown',
+        source: 'dummy_site',
+      },
+      timestamp: now(),
+    };
+    session.vaultData.security.breachAlerts.unshift(warning);
+    session.vaultData.security.breachAlerts = session.vaultData.security.breachAlerts.slice(0, 100);
+    await persistVault();
+    const cloudData = await loadCloud();
+    if (cloudData) {
+      await sendBreachEmailIfConfigured(warning, cloudData);
+    }
+    return { success: true };
+  }
+
   addSecurityEvent(event.type, `Page event: ${event.type}`, event);
+  if (event.type === 'webauthn_get' || event.type === 'webauthn_create') {
+    await addRiskEvent('webauthn_activity', {
+      origin: event.origin || event.url || 'unknown',
+      type: event.type,
+    });
+    return { success: true };
+  }
   await persistVault();
   return { success: true };
 }
@@ -1249,6 +1576,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'GET_OTP_CODES':
           response = await getOtpCodes();
           break;
+        case 'VERIFY_OTP_CODE':
+          response = await verifyOtpCode(request.id, request.code);
+          break;
         case 'INCREMENT_HOTP':
           response = await incrementHotp(request.id);
           break;
@@ -1263,6 +1593,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'SEND_TEST_EMAIL':
           response = await sendTestEmail(request || {});
+          break;
+        case 'GET_AUTH_STATUS':
+          response = await getAuthStatus();
+          break;
+        case 'GET_RECOVERY_CODES':
+          response = await getRecoveryCodes();
+          break;
+        case 'REGENERATE_RECOVERY_CODES':
+          response = await regenerateRecoveryCodes();
           break;
         case 'GET_SECURITY_EVENTS':
           response = await getSecurityEvents();
@@ -1282,6 +1621,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'GET_DECOY_STATUS':
           response = await getDecoyStatus();
+          break;
+        case 'GET_DECOY_CREDENTIALS_DEV':
+          response = await getDecoyCredentialsDev();
           break;
         case 'CHECK_BREACH_NOW':
           response = await checkBreachNow();

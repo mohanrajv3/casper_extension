@@ -1,157 +1,78 @@
 # CASPER Technical Status and Implementation Notes
 
-Date: 2026-03-07
+Date: 2026-03-08
 
-## 1) Project objective implemented
-Implemented a browser extension with deception-based breach detection:
-- Real credential vault
-- Decoy credential generation (honeytokens)
-- Honey server registration and monitoring
-- Breach detection alerts in extension
-- Breach/welcome email alerts via EmailJS
+## 1) Current project definition
+CASPER is a browser extension that combines:
+1. Password vault
+2. OTP authenticator
+3. Deception-based breach detection
+4. Incident-response UX (alerts, details, guidelines)
 
-This follows the principle: detect evidence of vault exfiltration via decoy use, not by monitoring third-party providers directly.
+It is designed as a secure academic prototype with controlled telemetry-based detection.
 
-## 2) Current architecture
-## Extension (`/casper-extension`)
+## 2) Architecture
+### Extension (`/casper-extension`)
 - `background/service-worker.js`
-  - Core runtime, vault operations, CASPER flow, decoy pipeline, messaging APIs
-- `content/autofill.js`
-  - Form scan, save prompt, page autofill injection
-- `vault/vault.html`, `vault/vault.js`, `vault/vault.css`
-  - Full vault UI: passwords, OTP, security dashboard, settings
-- `popup/*`
-  - Setup/unlock and quick actions
+  - Vault lifecycle, auth policy, decoy logic, email, event ingestion
 - `background/casper-core.js`
-  - Cryptographic helpers and vault encrypt/decrypt primitives
-- `background/sync-manager.js`
-  - Cloud/local sync handling with fallback behavior
+  - Crypto helpers and OTP generation
+- `content/autofill.js`
+  - Autofill and save/update prompts (result-aware for dummy site)
+- `vault/*`
+  - Main UI, security dashboard, breach details modal, guidelines launcher
+- `popup/*`
+  - Setup/unlock flow and first-run recovery code display
 
-## Honey server (`/honey-server`)
-- `server.js`
-  - HTTP endpoints for decoy registration and breach checks
-- `attacker-script.js`
-  - Simulates decoy login for demo/testing
-- `data/store.json`
-  - Local storage for decoys + alerts (server-side)
+### Controlled demo backend (`/dummy-site`)
+- Multi-page fitness site (`Home`, `Login`, `Register`, `Workouts`, `Dashboard`)
+- Auth endpoints:
+  - `POST /auth/register`
+  - `POST /auth/login`
+- Deception endpoints:
+  - `POST /decoy/register`
+  - `POST /decoy/check`
+- Debug endpoints:
+  - `GET /alerts`
+  - `GET /decoys`
+  - `GET /health`
 
-## 3) Services and integrations
-## A) Honey server (Render)
-Live URL:
-- `https://casper-extension.onrender.com`
+### Hosted/local honey backend (`/honey-server`)
+- Secondary backend option aligned with extension API contract.
 
-Main endpoints:
-- `GET /` -> server info
-- `GET /health` -> health check
-- `POST /decoy/register` -> register decoys
-- `POST /decoy/check` -> check breach events for provided decoy IDs
-- `POST /auth/login` -> simulated attacker login endpoint
-- `GET /decoys` and `GET /alerts` -> debug endpoints (auth required)
+## 3) Completed feature map
+1. Vault encryption and PIN unlock
+2. Sensitive-action step-up PIN verification
+3. Password CRUD and autofill
+4. Save/update credential prompting
+5. OTP onboarding + code generation + verify action
+6. Recovery code generation/regeneration
+7. Unlock rate limiting and lockout timers
+8. Auth Status card (attempts left / lockout countdown)
+9. Decoy generation per credential
+10. Decoy registration and monitoring
+11. Breach detail modal in UI
+12. Wrong-password warning ingestion from dummy site
+13. Security response guide page
+14. Email test/welcome/breach warning notifications
+15. Developer-only decoy view (PIN-gated)
 
-Auth:
-- Bearer token via `Authorization: Bearer <HONEY_API_TOKEN>`
+## 4) Key recent changes
+1. Added dummy site register + login as separate pages.
+2. Switched dummy app to fitness-themed multi-page website.
+3. Added result-aware save prompt behavior on dummy site (no prompt on failed auth).
+4. Added wrong-password warning conversion into security events + warning alerts.
+5. Added `Security Response Guide` button and guidelines page.
 
-## B) EmailJS
-Configured in extension code:
-- Service ID: `service_zi7rghf`
-- Public Key: `dXRu3TBvGNhECPyuB`
-- Breach template: `template_n6m2wxk`
-- Welcome template: `template_zgcsbzo`
+## 5) Behavior clarifications
+1. Historical alerts remain until cleared (future enhancement).
+2. `Check Breach Now` reports new events; dashboard count includes historical alerts.
+3. Third-party backend detection (e.g., Instagram server-side auth results) is out of scope.
+4. Detection claim is valid for controlled monitored endpoints.
 
-Behavior:
-- Welcome email on vault onboarding / first credential email capture
-- Breach email on detected decoy-triggered events
-- Test email from settings
-
-## 4) Key implemented functions
-## `background/service-worker.js`
-- `makeDecoyVariants(username, password, count)`
-  - Creates decoy username/password variants.
-- `registerDecoysWithHoneyServer(decoys, serviceName)`
-  - Registers decoys with password hash only.
-- `checkHoneyServerForBreach()`
-  - Polls `/decoy/check`, creates breach events, triggers email.
-- `triggerBreachTest()`
-  - Sends simulated decoy login and performs immediate breach check.
-- `sendBreachEmailIfConfigured(event, cloudData)`
-  - Sends breach alert mail and logs success/failure.
-- `addPassword`, `updatePassword`, `deletePassword`
-  - Integrated decoy create/regenerate/remove lifecycle.
-- `updateSettings`
-  - Stores deception settings and restarts polling.
-- Message routes:
-  - `GET_DECOY_STATUS`
-  - `CHECK_BREACH_NOW`
-  - `TRIGGER_BREACH_TEST`
-
-## `vault/vault.js`
-- `loadSecurity()`
-  - Loads breach alerts + decoy status and updates dashboard state.
-- `checkBreachNow()`
-  - On-demand breach check.
-- `triggerBreachTest()`
-  - Runs test and now shows real email-send outcome.
-- Settings binding for deception and email config.
-
-## `content/autofill.js`
-- Save password prompt on submit/login click/Enter.
-- Context invalidation handling with clear retry message.
-
-## `honey-server/server.js`
-- Token enforcement for protected endpoints.
-- `/decoy/check` implementation aligned with extension payload.
-- Root endpoint `/` added for status response.
-
-## 5) Important fixes completed
-1. Integrated friend’s branch concepts without destructive merge.
-2. Added honey-server project into workspace.
-3. Fixed extension/server API mismatch (`/decoy/check` and payload alignment).
-4. Fixed security dashboard inconsistency:
-- Top breach card now uses actual breach alert count.
-5. Improved breach test UX:
-- UI now reports actual email send state.
-- Manual fallback breach test email path added.
-6. Improved autofill error handling:
-- Clear message when extension context is invalidated.
-7. Render readiness:
-- Server uses `PORT` and `0.0.0.0`.
-
-## 6) Current known behavior
-1. `No breach detected` means no new breach event since last check window.
-2. `/decoys` may show historic test/demo rows from older users/runs.
-3. Decoys currently use `user_id: "default"` from extension registration path.
-4. Render file storage is ephemeral unless disk is configured.
-
-## 7) Progress summary
-## Completed
-- Core vault + OTP + autofill
-- Save prompt workflow
-- Deception monitoring integration
-- Honey server deployment on Render
-- Breach detection dashboard
-- Email test/welcome/breach alerts
-- PIN verification for sensitive edits
-
-## Pending/next recommended
-1. Send real `user_id` from extension to honey server for clean multi-user separation.
-2. Add "Register Decoys Now" action to re-register after server reset.
-3. Add "Acknowledge/Clear Breach Alerts" UX.
-4. Add Render persistent disk and set `HONEY_DATA_DIR=/var/data/casper-honey`.
-5. Add security/audit endpoint for mail delivery diagnostics.
-6. Add automated tests for decoy lifecycle + breach check flow.
-
-## 8) Quick operational runbook
-1. Verify server: `GET /health`.
-2. In extension settings, verify URL + API key.
-3. Add credential and check `Decoys: X/Y monitored`.
-4. Trigger breach test.
-5. Check logs:
-- Extension `View Security Logs`
-- Server `/alerts` with auth token
-
-## 9) Definition of done for project demo
-1. Save real password.
-2. Show decoy generation and monitored count.
-3. Simulate attacker login to honey server.
-4. Show breach detection event in extension.
-5. Show breach email delivery evidence.
+## 6) Remaining recommended enhancements
+1. Add alert acknowledge/resolve workflow.
+2. Add clear separation of WARNING vs CRITICAL counts in UI cards.
+3. Add exportable incident report from breach details modal.
+4. Add automated integration tests for dummy site + extension message flows.
+5. Add passkey-native step-up where browser support is available.

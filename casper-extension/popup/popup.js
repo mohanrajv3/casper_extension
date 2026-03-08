@@ -216,6 +216,11 @@ class CasperPopup {
         await this.checkVaultStatus();
         this.showScreen('mainScreen');
         this.showSuccess('Vault created successfully!');
+        if (response.data?.recoveryCodes?.length) {
+          window.alert(
+            `Save these recovery codes now (shown once):\n\n${response.data.recoveryCodes.join('\n')}`
+          );
+        }
         if (alertEmail) {
           this.showSuccess('Welcome email queued. Check inbox/spam.');
         }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CASPER Security Response Guidelines</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.5;
+    }
+    main {
+      max-width: 920px;
+      margin: 24px auto 40px;
+      padding: 0 16px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 10px; font-size: 28px; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    .critical { color: #b91c1c; font-weight: 700; }
+    ol { margin: 8px 0 0 20px; }
+    li { margin-bottom: 6px; }
+    code { background: #eef2ff; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>CASPER Security Response Guidelines</h1>
+    <p class="critical">Use this playbook when CASPER reports breach alerts or wrong-password probing activity.</p>
+
+    <section class="card">
+      <h2>Immediate Actions (First 5 Minutes)</h2>
+      <ol>
+        <li>Lock the vault from CASPER UI.</li>
+        <li>Open Security tab and review <code>View Breach Details</code>.</li>
+        <li>Note service, time, source IP, and affected username.</li>
+        <li>If alerts are unexpected, stop using suspicious devices/sessions.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Credential Containment (Next 15 Minutes)</h2>
+      <ol>
+        <li>Change password for affected service immediately.</li>
+        <li>Enable/confirm MFA on affected service account.</li>
+        <li>Rotate similar/reused passwords across other services.</li>
+        <li>Regenerate CASPER recovery codes and store securely offline.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>CASPER-Specific Recovery</h2>
+      <ol>
+        <li>In CASPER Settings, verify Honey Server URL and token are valid.</li>
+        <li>Regenerate credentials if needed and confirm decoys are monitored.</li>
+        <li>Run <code>Check Breach Now</code> to confirm no new active events.</li>
+        <li>Use <code>Show Decoys (Dev)</code> only for controlled demos/testing.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>If Wrong-Password Attempts Are Detected</h2>
+      <ol>
+        <li>Treat repeated failures as possible credential probing.</li>
+        <li>Check whether username is publicly exposed/reused.</li>
+        <li>Increase account monitoring and rate-limiting window.</li>
+        <li>Escalate if failures come from unknown repeated IP patterns.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Post-Incident Validation</h2>
+      <ol>
+        <li>Ensure test email + breach email delivery is working.</li>
+        <li>Confirm decoy count and monitoring status in Security Dashboard.</li>
+        <li>Verify no new breach events after remediation.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
