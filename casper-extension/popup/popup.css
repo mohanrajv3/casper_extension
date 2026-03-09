@@ -1,4 +1,16 @@
 /* CASPER Popup Styles */
+:root {
+  color-scheme: light dark;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e5e7eb;
+  --border-strong: #cbd5e1;
+  --hover: #f1f5f9;
+  --brand: #667eea;
+}
 
 * {
   margin: 0;
@@ -14,8 +26,8 @@ html {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f8fafc;
-  color: #1e293b;
+  background: var(--bg);
+  color: var(--text);
   line-height: 1.5;
   width: 380px;
   min-width: 380px;
@@ -26,7 +38,7 @@ body {
 .popup {
   width: 380px;
   min-height: 500px;
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -139,13 +151,15 @@ body {
   display: block;
   font-weight: 500;
   margin-bottom: 6px;
-  color: #374151;
+  color: var(--text);
 }
 
 .input-group input {
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: 8px;
   font-size: 16px;
   transition: border-color 0.2s;
@@ -268,14 +282,14 @@ body {
 .btn-text {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
 }
 
 /* Recent Section */
 .recent-section h3 {
   font-size: 18px;
   margin-bottom: 12px;
-  color: #1e293b;
+  color: var(--text);
 }
 
 .password-list {
@@ -288,7 +302,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 8px;
   cursor: pointer;
@@ -296,15 +310,15 @@ body {
 }
 
 .password-item:hover {
-  border-color: #667eea;
-  background: #f8fafc;
+  border-color: var(--brand);
+  background: var(--surface-2);
 }
 
 .password-favicon {
   width: 24px;
   height: 24px;
   border-radius: 4px;
-  background: #e5e7eb;
+  background: var(--hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -318,12 +332,12 @@ body {
 
 .password-title {
   font-weight: 500;
-  color: #1e293b;
+  color: var(--text);
   font-size: 14px;
 }
 
 .password-username {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -342,7 +356,7 @@ body {
 }
 
 .icon-btn:hover {
-  background: #f3f4f6;
+  background: var(--hover);
 }
 
 /* Footer Actions */
@@ -377,7 +391,7 @@ body {
 /* Vault Info */
 .vault-info {
   text-align: center;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 14px;
   margin-top: 16px;
   padding-top: 16px;
@@ -402,7 +416,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -477,31 +491,98 @@ body {
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --surface: #111a2e;
+    --surface-2: #17223c;
+    --text: #e6edf8;
+    --text-muted: #b8c3d9;
+    --border: #2a3856;
+    --border-strong: #3a4c73;
+    --hover: #1a2743;
+    --brand: #8ea2ff;
+  }
+
   body {
-    background: #0f172a;
-    color: #e2e8f0;
+    background: var(--bg);
+    color: var(--text);
   }
-  
+
   .popup {
-    background: #1e293b;
+    background: var(--surface);
   }
-  
+
+  .screen,
+  .setup-content h2,
+  .screen-header,
+  .recent-section h3,
+  .password-title,
+  .input-group label,
+  .btn-text {
+    color: var(--text);
+  }
+
+  .setup-content p,
+  .password-username,
+  .vault-info,
+  .back-btn {
+    color: var(--text-muted);
+  }
+
   .action-btn {
-    background: #334155;
-    border-color: #475569;
+    background: var(--surface-2);
+    border-color: var(--border-strong);
   }
-  
+
   .input-group input {
-    background: #334155;
-    border-color: #475569;
-    color: #e2e8f0;
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text);
   }
-  
+
+  .password-item,
+  .footer-actions,
+  .error-message,
+  .info-box {
+    border-color: var(--border);
+  }
+
   .password-item {
-    border-color: #475569;
+    background: var(--surface);
+    border-color: var(--border-strong);
   }
-  
+
   .password-item:hover {
-    background: #334155;
+    background: var(--hover);
+  }
+
+  .icon-btn:hover,
+  .generate-password-btn:hover,
+  .secondary-btn:hover {
+    background: var(--hover);
+  }
+
+  .secondary-btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  .password-favicon {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .header,
+  .primary-btn {
+    background: linear-gradient(135deg, #4f62c9 0%, #4f2f8b 100%);
+  }
+
+  .unlock-btn {
+    background: #0f9f78;
+  }
+
+  .unlock-btn:hover {
+    background: #0b7f61;
   }
 }

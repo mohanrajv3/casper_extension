@@ -8,6 +8,7 @@ class CasperPopup {
     this.currentScreen = 'loading';
     this.vaultStatus = null;
     this.currentTab = null;
+    this.popupViewPort = null;
     
     this.init();
   }
@@ -16,10 +17,46 @@ class CasperPopup {
    * Initialize popup
    */
   async init() {
+    this.connectPopupViewPort();
+    await this.migrateLegacyBiometricConfig();
     await this.getCurrentTab();
     await this.checkVaultStatus();
     this.setupEventListeners();
     this.showAppropriateScreen();
+  }
+
+  async migrateLegacyBiometricConfig() {
+    try {
+      const data = await chrome.storage.local.get(['casperBiometric']);
+      const conf = data.casperBiometric || null;
+      if (!conf || !conf.pin) return;
+      await chrome.storage.local.set({
+        casperBiometric: {
+          enabled: Boolean(conf.enabled),
+          credentialId: conf.credentialId || '',
+          pinForDemo: conf.pin,
+          migratedAt: Date.now(),
+        },
+      });
+    } catch {
+      // ignore migration failures
+    }
+  }
+
+  connectPopupViewPort() {
+    try {
+      if (this.popupViewPort) return;
+      this.popupViewPort = chrome.runtime.connect({ name: 'popup_view' });
+      window.addEventListener('beforeunload', () => {
+        try {
+          this.popupViewPort?.disconnect();
+        } catch {
+          // noop
+        }
+      });
+    } catch {
+      // ignore
+    }
   }
 
   /**
@@ -141,6 +178,8 @@ class CasperPopup {
     
     // Unlock screen
     document.getElementById('unlockBtn')?.addEventListener('click', () => this.unlockVault());
+    document.getElementById('biometricUnlockBtn')?.addEventListener('click', () => this.unlockWithBiometric());
+    document.getElementById('recoveryUnlockBtn')?.addEventListener('click', () => this.unlockWithRecoveryQuestions());
     document.getElementById('pinInput')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.unlockVault();
     });
@@ -152,6 +191,7 @@ class CasperPopup {
     document.getElementById('vaultBtn')?.addEventListener('click', () => this.openVault());
     document.getElementById('lockBtn')?.addEventListener('click', () => this.lockVault());
     document.getElementById('settingsBtn')?.addEventListener('click', () => this.openSettings());
+    document.getElementById('tourBtn')?.addEventListener('click', () => this.openProductTour());
     
     // Add password screen
     document.getElementById('backFromAdd')?.addEventListener('click', () => this.showScreen('mainScreen'));
@@ -187,6 +227,10 @@ class CasperPopup {
     const pin = document.getElementById('setupPin').value;
     const confirmPin = document.getElementById('confirmPin').value;
     const alertEmail = document.getElementById('alertEmail')?.value?.trim() || '';
+    const recoveryQ1 = document.getElementById('recoveryQ1')?.value?.trim() || '';
+    const recoveryA1 = document.getElementById('recoveryA1')?.value?.trim() || '';
+    const recoveryQ2 = document.getElementById('recoveryQ2')?.value?.trim() || '';
+    const recoveryA2 = document.getElementById('recoveryA2')?.value?.trim() || '';
     
     if (!pin || pin.length < 4) {
       this.showError('PIN must be at least 4 digits');
@@ -202,6 +246,11 @@ class CasperPopup {
       this.showError('Please enter a valid alert email');
       return;
     }
+
+    if (!recoveryQ1 || !recoveryA1 || !recoveryQ2 || !recoveryA2) {
+      this.showError('Please set both recovery questions and answers');
+      return;
+    }
     
     this.showLoading(true);
     
@@ -209,7 +258,11 @@ class CasperPopup {
       const response = await this.sendMessage({ 
         type: 'INITIALIZE_VAULT', 
         pin: pin,
-        alertEmail: alertEmail
+        alertEmail: alertEmail,
+        recoveryQuestions: [
+          { question: recoveryQ1, answer: recoveryA1 },
+          { question: recoveryQ2, answer: recoveryA2 },
+        ],
       });
       
       if (response.success) {
@@ -224,11 +277,213 @@ class CasperPopup {
         if (alertEmail) {
           this.showSuccess('Welcome email queued. Check inbox/spam.');
         }
+        await this.offerBiometricEnrollment(pin);
       } else {
         this.showError(response.message);
       }
     } catch (error) {
       this.showError('Failed to create vault: ' + error.message);
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  async unlockWithRecoveryQuestions() {
+    this.showLoading(true);
+    try {
+      const qResp = await this.sendMessage({ type: 'GET_RECOVERY_QUESTIONS' });
+      if (!qResp.success) {
+        this.showError(qResp.message || 'Recovery questions are not configured');
+        return;
+      }
+      const questions = qResp.data?.questions || [];
+      if (!questions.length) {
+        this.showError('Recovery questions unavailable');
+        return;
+      }
+
+      const answers = [];
+      for (const q of questions) {
+        const input = window.prompt(`Recovery question:\n${q}`, '');
+        if (input === null) return;
+        answers.push(String(input || '').trim());
+      }
+
+      const response = await this.sendMessage({
+        type: 'UNLOCK_WITH_RECOVERY',
+        answers,
+      });
+      if (!response.success) {
+        this.showError(response.message || 'Recovery unlock failed');
+        return;
+      }
+      await this.checkVaultStatus();
+      this.showScreen('mainScreen');
+      this.loadRecentPasswords();
+      this.showSuccess('Recovered and unlocked');
+    } catch (error) {
+      this.showError('Recovery unlock failed: ' + error.message);
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  toBase64(bytes) {
+    return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  }
+
+  fromBase64(base64) {
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+
+  randomBytes(length = 32) {
+    const arr = new Uint8Array(length);
+    crypto.getRandomValues(arr);
+    return arr;
+  }
+
+  async offerBiometricEnrollment(pin) {
+    if (!window.PublicKeyCredential || !navigator.credentials) return;
+    const ok = window.confirm('Enable face/fingerprint unlock for Chrome demo on this device?');
+    if (!ok) return;
+    try {
+      const userId = this.randomBytes(16);
+      const challenge = this.randomBytes(32);
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: 'CASPER Vault' },
+          user: {
+            id: userId,
+            name: 'casper-user',
+            displayName: 'CASPER User',
+          },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          timeout: 60000,
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+          },
+          attestation: 'none',
+        },
+      });
+      const credentialId = this.toBase64(cred.rawId);
+      await chrome.storage.local.set({
+        casperBiometric: {
+          enabled: true,
+          credentialId,
+          pinForDemo: pin,
+          createdAt: Date.now(),
+        },
+      });
+      this.showSuccess('Biometric unlock enabled on this device');
+    } catch (error) {
+      this.showError('Biometric enrollment skipped: ' + error.message);
+    }
+  }
+
+  promptForHiddenPin(title = 'PIN Required', message = 'Enter your PIN to continue') {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'background:rgba(0,0,0,.45)',
+        'z-index:2000',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'padding:12px',
+      ].join(';');
+
+      const card = document.createElement('div');
+      card.style.cssText = [
+        'width:100%',
+        'max-width:320px',
+        'background:#fff',
+        'color:#111827',
+        'border-radius:10px',
+        'padding:14px',
+        'box-shadow:0 14px 32px rgba(0,0,0,.25)',
+      ].join(';');
+      card.innerHTML = `
+        <div style="font-weight:700;margin-bottom:6px;">${title}</div>
+        <div style="font-size:13px;color:#475569;margin-bottom:10px;">${message}</div>
+        <input id="popupHiddenPinInput" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+          <button id="popupHiddenPinCancel" style="padding:8px 10px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;cursor:pointer;">Cancel</button>
+          <button id="popupHiddenPinOk" style="padding:8px 10px;border:0;background:#2563eb;color:#fff;border-radius:8px;cursor:pointer;">Continue</button>
+        </div>
+      `;
+
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      const input = card.querySelector('#popupHiddenPinInput');
+      const okBtn = card.querySelector('#popupHiddenPinOk');
+      const cancelBtn = card.querySelector('#popupHiddenPinCancel');
+
+      const done = (value) => {
+        overlay.remove();
+        resolve(value);
+      };
+
+      okBtn?.addEventListener('click', () => done(String(input?.value || '').trim()));
+      cancelBtn?.addEventListener('click', () => done(''));
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) done('');
+      });
+      input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') done(String(input?.value || '').trim());
+        if (e.key === 'Escape') done('');
+      });
+      input?.focus();
+    });
+  }
+
+  async unlockWithBiometric() {
+    if (!window.PublicKeyCredential || !navigator.credentials) {
+      this.showError('Biometric unlock is not supported on this browser/device');
+      return;
+    }
+    this.showLoading(true);
+    try {
+      const data = await chrome.storage.local.get(['casperBiometric']);
+      const conf = data.casperBiometric || {};
+      if (!conf.enabled || !conf.credentialId) {
+        this.showError('Biometric unlock is not enabled yet');
+        return;
+      }
+      const challenge = this.randomBytes(32);
+      await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          allowCredentials: [{ type: 'public-key', id: this.fromBase64(conf.credentialId) }],
+          userVerification: 'required',
+          timeout: 60000,
+        },
+      });
+      const pin = String(conf.pinForDemo || '').trim();
+      if (!pin) {
+        this.showError('Biometric PIN data missing. Re-enroll biometric unlock once.');
+        return;
+      }
+      const response = await this.sendMessage({
+        type: 'UNLOCK_VAULT',
+        pin,
+      });
+      if (!response.success) {
+        this.showError(response.message || 'Biometric unlock failed');
+        return;
+      }
+      await this.checkVaultStatus();
+      this.showScreen('mainScreen');
+      this.loadRecentPasswords();
+      this.showSuccess('Unlocked with biometric');
+    } catch (error) {
+      this.showError('Biometric unlock failed: ' + error.message);
     } finally {
       this.showLoading(false);
     }
@@ -532,8 +787,13 @@ class CasperPopup {
    * Open settings
    */
   openSettings() {
-    // Could open settings page or show settings in popup
-    this.showError('Settings not implemented yet');
+    chrome.tabs.create({ url: chrome.runtime.getURL('vault/vault.html#settings') });
+    window.close();
+  }
+
+  openProductTour() {
+    chrome.tabs.create({ url: chrome.runtime.getURL('vault/vault.html?tour=1#passwords') });
+    window.close();
   }
 
   /**

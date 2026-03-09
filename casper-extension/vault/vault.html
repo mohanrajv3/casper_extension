@@ -85,6 +85,10 @@
           <h2>Authenticator</h2>
           <div class="section-actions">
             <input type="search" class="search-input" placeholder="Search accounts..." id="passkeySearch">
+            <button class="secondary-btn" id="addSitePasskeyBtn">
+              <span>🔐</span>
+              <span>Save Passkey</span>
+            </button>
             <button class="primary-btn" id="addPasskeyBtn">
               <span>➕</span>
               <span>Add OTP</span>
@@ -99,6 +103,21 @@
             <p>Add TOTP or HOTP accounts from an otpauth:// URI or manual secret</p>
           </div>
         </div>
+      </section>
+
+      <!-- Secure Notes Section -->
+      <section class="content-section" id="notesSection">
+        <div class="section-header">
+          <h2>Secure Notes</h2>
+          <div class="section-actions">
+            <input type="search" class="search-input" placeholder="Search notes..." id="noteSearch">
+            <button class="primary-btn" id="addNoteBtn">
+              <span>➕</span>
+              <span>Add Note</span>
+            </button>
+          </div>
+        </div>
+        <div class="items-grid" id="notesGrid"></div>
       </section>
 
       <!-- Security Section -->
@@ -190,8 +209,27 @@
             <h3>Site Risk Summary</h3>
           </div>
           <div class="card-content">
-            <div id="siteRiskSummary" class="site-risk-list">
-              <p>No site-level security data yet.</p>
+            <div class="status-indicator" id="siteRiskStatusIndicator">
+              <span class="indicator-dot"></span>
+              <span id="siteRiskStatusText">No active site risks</span>
+            </div>
+            <p id="siteRiskSubtext">No site-level incidents recorded yet.</p>
+            <div class="vault-stats">
+              <div class="stat">
+                <span class="stat-value" id="siteRiskTotalSites">0</span>
+                <span class="stat-label">Sites</span>
+              </div>
+              <div class="stat">
+                <span class="stat-value" id="siteRiskTotalBreaches">0</span>
+                <span class="stat-label">Breaches</span>
+              </div>
+              <div class="stat">
+                <span class="stat-value" id="siteRiskTotalWarnings">0</span>
+                <span class="stat-label">Warnings</span>
+              </div>
+            </div>
+            <div class="security-actions" style="margin-top: 12px;">
+              <button class="secondary-btn" id="viewSiteRiskBtn">View Site Risk Summary</button>
             </div>
           </div>
         </div>
@@ -202,7 +240,8 @@
           <button class="secondary-btn" id="checkBreachNowBtn">Check Breach Now</button>
           <button class="secondary-btn" id="openGuidelinesBtn">Security Response Guide</button>
           <button class="secondary-btn" id="viewBreachDetailsBtn">View Breach Details</button>
-          <button class="secondary-btn" id="showDecoysDevBtn">Show Decoys (Dev)</button>
+          <button class="secondary-btn" id="showPasswordDecoysDevBtn">Show Password Decoys (Dev)</button>
+          <button class="secondary-btn" id="showPasskeyDecoysDevBtn">Show Passkey Decoys (Dev)</button>
           <button class="secondary-btn" id="clearSiteAlertsBtn">Clear Site Alerts</button>
           <button class="secondary-btn" id="clearAllAlertsBtn">Clear All Alerts</button>
           <button class="secondary-btn" id="exportVaultBtn">Export Vault</button>
@@ -399,6 +438,14 @@
               <button class="secondary-btn" id="testEmailBtn">Send Test Email</button>
             </div>
           </div>
+
+          <div class="settings-group">
+            <h3>Account</h3>
+            <p class="muted">Reset clears all vault data, settings, alerts, and local sync cache for this extension profile.</p>
+            <div class="security-actions">
+              <button class="danger-btn" id="resetVaultBtn">Reset Vault</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -490,6 +537,45 @@
       </div>
       <div class="modal-footer">
         <button class="secondary-btn" id="closeDecoyModalFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="siteRiskModalOverlay" style="display: none;">
+    <div class="modal" id="siteRiskModal">
+      <div class="modal-header">
+        <h3>Site Risk Summary</h3>
+        <button class="close-btn" id="closeSiteRiskModal">×</button>
+      </div>
+      <div class="modal-content">
+        <div id="siteRiskDetailsSummary" class="breach-summary">Loading...</div>
+        <div id="siteRiskSummary" class="site-risk-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="closeSiteRiskModalFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="noteModalOverlay" style="display: none;">
+    <div class="modal" id="noteModal">
+      <div class="modal-header">
+        <h3 id="noteModalTitle">Add Secure Note</h3>
+        <button class="close-btn" id="closeNoteModal">×</button>
+      </div>
+      <div class="modal-content">
+        <div class="form-group">
+          <label for="noteModalInputTitle">Title</label>
+          <input id="noteModalInputTitle" type="text" placeholder="e.g. Recovery steps">
+        </div>
+        <div class="form-group">
+          <label for="noteModalInputContent">Content</label>
+          <textarea id="noteModalInputContent" placeholder="Write your secure note here..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="cancelNoteModal">Cancel</button>
+        <button class="primary-btn" id="saveNoteModal">Save Note</button>
       </div>
     </div>
   </div>

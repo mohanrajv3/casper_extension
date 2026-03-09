@@ -33,6 +33,15 @@
       <button type="submit">Create Account</button>
       <p id="registerResult" class="result"></p>
     </form>
+
+    <section class="card">
+      <h2>Passkey Registration</h2>
+      <p class="muted">Use email or mobile number to create a passkey for this account.</p>
+      <label>Identifier (Email / Mobile)</label>
+      <input id="passkeyRegisterIdentifier" type="text" placeholder="you@example.com or +91..." />
+      <button type="button" id="createPasskeyBtn" class="secondary-action">Create Passkey</button>
+      <p id="passkeyRegisterResult" class="result"></p>
+    </section>
   </main>
 
   <script src="/site/app.js"></script>

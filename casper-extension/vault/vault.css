@@ -749,6 +749,91 @@ body {
   padding: 0 24px 24px;
 }
 
+/* Product Tour */
+.tour-launcher {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10050;
+  border: 1px solid #3a4c73;
+  background: #1d4ed8;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.tour-launcher:hover {
+  background: #1e40af;
+}
+
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  background: rgba(5, 10, 24, 0.5);
+}
+
+.tour-bubble {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #d1d9ea;
+  border-radius: 12px;
+  padding: 14px;
+  z-index: 10080;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 0 0 3px rgba(147, 197, 253, 0.45);
+  animation: tourPulse 1.3s ease-in-out infinite;
+}
+
+.tour-bubble .tour-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.tour-bubble h4 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.tour-bubble p {
+  margin: 0 0 12px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.tour-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tour-actions .secondary-btn,
+.tour-actions .primary-btn {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.tour-highlight {
+  position: relative;
+  z-index: 10060 !important;
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.25);
+}
+
+@keyframes tourPulse {
+  0% { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 0 0 2px rgba(147, 197, 253, 0.35); }
+  50% { box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32), 0 0 0 4px rgba(147, 197, 253, 0.58); }
+  100% { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28), 0 0 0 2px rgba(147, 197, 253, 0.35); }
+}
+
 .breach-summary {
   margin-bottom: 12px;
   color: #334155;
@@ -778,6 +863,8 @@ body {
 .site-risk-list {
   display: grid;
   gap: 10px;
+  max-height: 420px;
+  overflow: auto;
 }
 
 .site-risk-row {
@@ -977,44 +1064,174 @@ body {
   .modal-footer .primary-btn {
     width: 100%;
   }
+
+  .tour-launcher {
+    right: 10px;
+    bottom: 10px;
+    padding: 9px 12px;
+  }
+
+  .tour-actions {
+    flex-wrap: wrap;
+  }
 }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   body {
-    background: #0f172a;
-    color: #e2e8f0;
+    background: #0b1220;
+    color: #e8eef9;
   }
-  
+
+  .sidebar {
+    background: linear-gradient(180deg, #3d4fa7 0%, #3b2568 100%);
+  }
+
   .main-content {
-    background: #0f172a;
+    background: #0b1220;
   }
-  
+
+  .section-header h2,
+  .password-title,
+  .card-header h3,
+  .settings-group h3,
+  .details-header h3,
+  .modal-header h3,
+  .stat-value,
+  .empty-state h3,
+  .site-risk-row .domain,
+  .breach-row strong {
+    color: #e8eef9;
+  }
+
+  .password-info,
+  .empty-state,
+  .empty-state p,
+  .stat-label,
+  .setting-item label,
+  .setting-stack label,
+  .form-group label,
+  .close-btn,
+  .site-risk-row .meta,
+  .breach-row small,
+  .breach-summary,
+  .option-group label,
+  .decoy-status,
+  #breachStatusSubtext,
+  #decoyStatusText,
+  #authStatusSubtext {
+    color: #b9c6dd;
+  }
+
   .password-item,
   .security-card,
   .settings-group,
-  .modal {
-    background: #1e293b;
-    border-color: #334155;
+  .modal,
+  .details-panel,
+  .site-risk-row {
+    background: #121c31;
+    border-color: #2b3a58;
   }
-  
+
+  .details-header {
+    border-bottom-color: #2b3a58;
+  }
+
   .search-input,
   .form-group input,
   .form-group textarea,
+  .form-group select,
   .generated-password,
-  .setting-stack input {
-    background: #334155;
-    border-color: #475569;
-    color: #e2e8f0;
+  .setting-stack input,
+  .setting-item select {
+    background: #1a2743;
+    border-color: #3a4c73;
+    color: #e8eef9;
   }
-  
+
+  .search-input::placeholder,
+  .form-group input::placeholder,
+  .form-group textarea::placeholder,
+  .setting-stack input::placeholder {
+    color: #9eb0ce;
+  }
+
   .secondary-btn,
   .copy-btn,
   .refresh-btn,
   .generate-btn,
   .toggle-visibility {
-    background: #334155;
-    border-color: #475569;
-    color: #e2e8f0;
+    background: #1a2743;
+    border-color: #3a4c73;
+    color: #e8eef9;
+  }
+
+  .secondary-btn:hover,
+  .copy-btn:hover,
+  .refresh-btn:hover,
+  .generate-btn:hover,
+  .toggle-visibility:hover,
+  .icon-btn:hover {
+    background: #223358;
+    border-color: #92a6ff;
+    color: #dce6ff;
+  }
+
+  .password-item:hover {
+    border-color: #92a6ff;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    background: #17243f;
+  }
+
+  .password-favicon {
+    background: #223358;
+    color: #dce6ff;
+  }
+
+  .icon-btn {
+    color: #dce6ff;
+  }
+
+  .primary-btn {
+    background: linear-gradient(135deg, #5b72e1 0%, #5b35a0 100%);
+  }
+
+  .danger-btn {
+    background: #dc3545;
+  }
+
+  .danger-btn:hover {
+    background: #bf2332;
+  }
+
+  .generated-password,
+  .breach-row {
+    background: #17243f;
+    border-color: #2b3a58;
+  }
+
+  .modal-overlay {
+    background: rgba(1, 5, 14, 0.72);
+  }
+
+  .setting-item {
+    border-bottom-color: #2b3a58;
+  }
+
+  .tour-bubble {
+    background: #121c31;
+    color: #e8eef9;
+    border-color: #2b3a58;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(146, 166, 255, 0.5);
+  }
+
+  .tour-bubble .tour-meta,
+  .tour-bubble p {
+    color: #b9c6dd;
+  }
+
+  .tour-highlight {
+    outline-color: #92a6ff;
+    box-shadow: 0 0 0 2px rgba(146, 166, 255, 0.35);
   }
 }

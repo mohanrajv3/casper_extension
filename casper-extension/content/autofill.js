@@ -229,6 +229,73 @@ class CasperAutofill {
         },
       }).catch(() => {});
     });
+
+    window.addEventListener('casper-passkey-register-success', (event) => {
+      const detail = event?.detail || {};
+      const userIdentifier = String(detail.userIdentifier || '').trim();
+      const credentialId = String(detail.credentialId || '').trim();
+      if (!userIdentifier || !credentialId) return;
+      this.maybePromptAndSavePasskey({
+        serviceName: detail.service_name || window.location.hostname,
+        userIdentifier,
+        credentialId,
+        source: 'dummy_site',
+      }).catch(() => {});
+    });
+
+    window.addEventListener('casper-passkey-login-success', (event) => {
+      const detail = event?.detail || {};
+      this.sendMessage({
+        type: 'SECURITY_EVENT',
+        event: {
+          type: 'webauthn_get',
+          service: detail.service_name || window.location.hostname,
+          userIdentifier: String(detail.userIdentifier || '').trim(),
+          credentialId: String(detail.credentialId || '').trim(),
+          source: 'dummy_site',
+          url: window.location.href,
+          timestamp: Date.now(),
+        },
+      }).catch(() => {});
+    });
+  }
+
+  async maybePromptAndSavePasskey(passkey) {
+    const settings = await this.getSettings();
+    if (settings && settings.savePrompts === false) return;
+
+    const existingResult = await this.sendMessage({ type: 'GET_PASSKEYS' });
+    if (existingResult?.requiresUnlock) {
+      this.notify('Unlock CASPER to save this passkey', 'warn');
+      return;
+    }
+    const existing = (existingResult?.success ? existingResult.data : []).find(
+      (p) =>
+        String(p.serviceName || '') === String(passkey.serviceName || '') &&
+        String(p.userIdentifier || '') === String(passkey.userIdentifier || '')
+    );
+
+    const shouldSave = existing
+      ? window.confirm(
+          `A passkey already exists for ${passkey.serviceName} and ${passkey.userIdentifier}.\nUpdate passkey?`
+        )
+      : window.confirm(`Save passkey for ${passkey.userIdentifier} on ${passkey.serviceName}?`);
+    if (!shouldSave) return;
+
+    const saved = await this.sendMessage({
+      type: 'SAVE_PASSKEY',
+      passkey: {
+        serviceName: passkey.serviceName,
+        userIdentifier: passkey.userIdentifier,
+        credentialId: passkey.credentialId,
+        source: passkey.source || 'webauthn',
+      },
+    });
+    if (!saved?.success) {
+      this.notify(saved?.message || 'Could not save passkey', 'err');
+      return;
+    }
+    this.notify(existing ? 'Passkey updated in CASPER' : 'Passkey saved to CASPER', 'ok');
   }
 
   shouldPrompt(username, password) {

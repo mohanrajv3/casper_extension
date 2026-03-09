@@ -34,6 +34,16 @@
       <p id="result" class="result"></p>
       <p class="muted tiny">Demo account: <strong>demo.user / DemoPass@123</strong></p>
     </form>
+
+    <section class="card">
+      <h2>Passkey Login</h2>
+      <p class="muted">Sign in with previously registered passkey.</p>
+      <label>Identifier (Email / Mobile)</label>
+      <input id="passkeyLoginIdentifier" type="text" placeholder="you@example.com or +91..." />
+      <button type="button" id="registerPasskeyFromLoginBtn" class="secondary-action">Register Passkey</button>
+      <button type="button" id="loginWithPasskeyBtn" class="secondary-action">Sign In with Passkey</button>
+      <p id="passkeyLoginResult" class="result"></p>
+    </section>
   </main>
 
   <script src="/site/app.js"></script>

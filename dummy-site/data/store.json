@@ -36,10 +36,70 @@
       "password_hash": "6a8a7daff50dc4bb585b540e439b8dc931df708b42d6102af18c4badc58aba79",
       "service_name": "127.0.0.1",
       "created_at": 1772964474859
+    },
+    {
+      "id": "ae600c591710aae0",
+      "username": "mohanraj",
+      "password_hash": "221b37fcdb52d0f7c39bbd0be211db0e1c00ca5fbecd5788780463026c6b964b",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773071632806
+    },
+    {
+      "id": "92704ef929004aa9",
+      "username": "mohanrajv",
+      "password_hash": "221b37fcdb52d0f7c39bbd0be211db0e1c00ca5fbecd5788780463026c6b964b",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773071653633
+    },
+    {
+      "id": "aba4e0b89898a855",
+      "username": "mohanrajv123",
+      "password_hash": "00c1fa7d947a79dca0b045f210920278725c4394f8bd3ba50f3dd824a3fb9c98",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773071798366
+    },
+    {
+      "id": "9ef9e31c9efb8e4f",
+      "username": "mohanrajv1231",
+      "password_hash": "2fa611bd0fa19c80142ea3e46fdde0dd60ef5c18355f5e29650ef78110c66001",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773072569660
+    },
+    {
+      "id": "0af00a38b002aa23",
+      "username": "aditya",
+      "password_hash": "822f2935cd87313ab4900483eb4a24003633efc487241c5ca7f1f5e9dbb76e10",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773073495523
+    },
+    {
+      "id": "030d05fdb0f8ffb2",
+      "username": "adityas",
+      "password_hash": "822f2935cd87313ab4900483eb4a24003633efc487241c5ca7f1f5e9dbb76e10",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773073529249
+    },
+    {
+      "id": "62bedc5171c5102b",
+      "username": "adit",
+      "password_hash": "ed02457b5c41d964dbd2f2a609d63fe1bb7528dbe55e1abf5b52c249cd735797",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773073575634
     }
   ],
   "decoys": [],
   "alerts": [
+    {
+      "id": "560175e642f02a3b",
+      "timestamp": 1773071871859,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "mohanrajv123",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
     {
       "id": "55e34d279be5bfbd",
       "timestamp": 1772967498060,

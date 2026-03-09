@@ -47,6 +47,23 @@
           <label for="alertEmail">Alert Email (for welcome/breach alerts)</label>
           <input type="email" id="alertEmail" placeholder="you@example.com">
         </div>
+
+        <div class="input-group">
+          <label for="recoveryQ1">Recovery Question 1</label>
+          <input type="text" id="recoveryQ1" placeholder="First pet name?">
+        </div>
+        <div class="input-group">
+          <label for="recoveryA1">Answer 1</label>
+          <input type="password" id="recoveryA1" placeholder="Answer">
+        </div>
+        <div class="input-group">
+          <label for="recoveryQ2">Recovery Question 2</label>
+          <input type="text" id="recoveryQ2" placeholder="Mother's birth city?">
+        </div>
+        <div class="input-group">
+          <label for="recoveryA2">Answer 2</label>
+          <input type="password" id="recoveryA2" placeholder="Answer">
+        </div>
         
         <button class="primary-btn" id="createVaultBtn">Create Vault</button>
         
@@ -63,6 +80,8 @@
           <label for="pinInput">Enter PIN to unlock</label>
           <input type="password" id="pinInput" placeholder="Enter PIN" maxlength="6" pattern="[0-9]*">
           <button class="unlock-btn" id="unlockBtn">Unlock</button>
+          <button class="secondary-btn" id="biometricUnlockBtn" style="margin-top:8px;">Unlock with Face/Fingerprint</button>
+          <button class="secondary-btn" id="recoveryUnlockBtn" style="margin-top:8px;">Forgot PIN? Use Recovery Questions</button>
         </div>
         
         <div class="error-message" id="errorMessage" style="display: none;"></div>
@@ -109,6 +128,7 @@
       <!-- Footer Actions -->
       <div class="footer-actions">
         <button class="secondary-btn" id="settingsBtn">⚙️ Settings</button>
+        <button class="secondary-btn" id="tourBtn">🧭 Product Tour</button>
         <button class="secondary-btn" id="lockBtn">🔒 Lock</button>
       </div>
     </div>

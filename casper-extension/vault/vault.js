@@ -3,15 +3,24 @@ class CasperVault {
     this.currentSection = 'passwords';
     this.passwords = [];
     this.otpEntries = [];
+    this.passkeyEntries = [];
+    this.notes = [];
     this.searchQuery = '';
     this.otpSearch = '';
+    this.noteSearch = '';
     this.refreshTimer = null;
     this.securityTimer = null;
     this.securityLoadBusy = false;
     this.selectedPasswordId = null;
     this.editingPasswordId = null;
+    this.editingNoteId = null;
     this.settings = {};
     this.authState = { failedUnlocks: 0, lockoutUntil: 0, isLockedOut: false };
+    this.tour = null;
+    this.tourSteps = [];
+    this.devDecoyPin = '';
+    this.vaultViewPort = null;
+    this.siteRiskRows = [];
 
     this.init();
   }
@@ -26,11 +35,49 @@ class CasperVault {
 
       this.updateHeader(status);
       this.bindEvents();
+      this.connectVaultViewPort();
       await this.loadSettings();
-      this.switchSection('passwords');
+      const requested = this.getSectionFromUrl();
+      await this.switchSection(requested || 'passwords');
       this.startOtpRefresh();
+      this.injectTourLauncher();
+      await this.maybeStartFirstRunTour();
+      if (this.shouldForceTourFromUrl()) {
+        await this.startProductTour(false);
+      }
     } catch (error) {
       this.toast(`Failed to initialize vault: ${error.message}`, 'error');
+    }
+  }
+
+  getSectionFromUrl() {
+    const hash = String(window.location.hash || '').replace('#', '').trim().toLowerCase();
+    const allowed = new Set(['passwords', 'passkeys', 'notes', 'generator', 'security', 'settings']);
+    return allowed.has(hash) ? hash : '';
+  }
+
+  shouldForceTourFromUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      return params.get('tour') === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  connectVaultViewPort() {
+    try {
+      if (this.vaultViewPort) return;
+      this.vaultViewPort = chrome.runtime.connect({ name: 'vault_view' });
+      window.addEventListener('beforeunload', () => {
+        try {
+          this.vaultViewPort?.disconnect();
+        } catch {
+          // noop
+        }
+      });
+    } catch {
+      // ignore
     }
   }
 
@@ -51,11 +98,18 @@ class CasperVault {
 
     document.getElementById('passkeySearch')?.addEventListener('input', (e) => {
       this.otpSearch = e.target.value.trim().toLowerCase();
-      this.renderOtpAccounts();
+      this.renderAuthenticatorAccounts();
+    });
+
+    document.getElementById('noteSearch')?.addEventListener('input', (e) => {
+      this.noteSearch = e.target.value.trim().toLowerCase();
+      this.renderNotes();
     });
 
     document.getElementById('addPasswordBtn')?.addEventListener('click', () => this.showModal());
     document.getElementById('addPasskeyBtn')?.addEventListener('click', () => this.addOtpFlow());
+    document.getElementById('addSitePasskeyBtn')?.addEventListener('click', () => this.addSitePasskeyFlow());
+    document.getElementById('addNoteBtn')?.addEventListener('click', () => this.showNoteModal());
 
     document.getElementById('closeModal')?.addEventListener('click', () => this.hideModal());
     document.getElementById('cancelModal')?.addEventListener('click', () => this.hideModal());
@@ -72,6 +126,12 @@ class CasperVault {
 
     document.getElementById('modalOverlay')?.addEventListener('click', (e) => {
       if (e.target === e.currentTarget) this.hideModal();
+    });
+    document.getElementById('closeNoteModal')?.addEventListener('click', () => this.hideNoteModal());
+    document.getElementById('cancelNoteModal')?.addEventListener('click', () => this.hideNoteModal());
+    document.getElementById('saveNoteModal')?.addEventListener('click', () => this.saveNoteFromModal());
+    document.getElementById('noteModalOverlay')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.hideNoteModal();
     });
 
     document.getElementById('closeDetails')?.addEventListener('click', () => this.hideDetails());
@@ -95,20 +155,20 @@ class CasperVault {
       });
     });
 
-    document.getElementById('changePinBtn')?.addEventListener('click', () => {
-      this.toast('PIN change requires vault migration; not enabled in this build.', 'info');
-    });
+    document.getElementById('changePinBtn')?.addEventListener('click', () => this.changePinFlow());
     document.getElementById('breachTestBtn')?.addEventListener('click', () => this.triggerBreachTest());
     document.getElementById('checkBreachNowBtn')?.addEventListener('click', () => this.checkBreachNow());
     document.getElementById('openGuidelinesBtn')?.addEventListener('click', () => this.openGuidelines());
     document.getElementById('viewBreachDetailsBtn')?.addEventListener('click', () => this.viewBreachDetails());
-    document.getElementById('showDecoysDevBtn')?.addEventListener('click', () => this.showDecoysDev());
+    document.getElementById('showPasswordDecoysDevBtn')?.addEventListener('click', () => this.showDecoysDev('password'));
+    document.getElementById('showPasskeyDecoysDevBtn')?.addEventListener('click', () => this.showDecoysDev('passkey'));
     document.getElementById('clearAllAlertsBtn')?.addEventListener('click', () => this.clearAllAlerts());
     document.getElementById('clearSiteAlertsBtn')?.addEventListener('click', () => this.clearSiteAlerts());
 
     document.getElementById('exportVaultBtn')?.addEventListener('click', () => this.exportVault());
     document.getElementById('viewLogsBtn')?.addEventListener('click', () => this.viewLogs());
     document.getElementById('testEmailBtn')?.addEventListener('click', () => this.sendTestEmail());
+    document.getElementById('resetVaultBtn')?.addEventListener('click', () => this.resetVaultFlow());
     document.getElementById('viewRecoveryCodesBtn')?.addEventListener('click', () => this.viewRecoveryCodes());
     document.getElementById('regenerateRecoveryCodesBtn')?.addEventListener('click', () => this.regenerateRecoveryCodes());
     document.getElementById('closeBreachModal')?.addEventListener('click', () => this.closeBreachDetailsModal());
@@ -120,6 +180,12 @@ class CasperVault {
     document.getElementById('closeDecoyModalFooter')?.addEventListener('click', () => this.closeDecoyDetailsModal());
     document.getElementById('decoyModalOverlay')?.addEventListener('click', (e) => {
       if (e.target === e.currentTarget) this.closeDecoyDetailsModal();
+    });
+    document.getElementById('viewSiteRiskBtn')?.addEventListener('click', () => this.openSiteRiskModal());
+    document.getElementById('closeSiteRiskModal')?.addEventListener('click', () => this.closeSiteRiskModal());
+    document.getElementById('closeSiteRiskModalFooter')?.addEventListener('click', () => this.closeSiteRiskModal());
+    document.getElementById('siteRiskModalOverlay')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closeSiteRiskModal();
     });
 
     const saveSettings = () => this.saveSettings();
@@ -153,6 +219,9 @@ class CasperVault {
     }
 
     this.currentSection = section;
+    if (window.location.hash !== `#${section}`) {
+      history.replaceState(null, '', `#${section}`);
+    }
 
     document.querySelectorAll('.nav-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.section === section);
@@ -165,7 +234,12 @@ class CasperVault {
     document.getElementById(`${section}Section`)?.classList.add('active');
 
     if (section === 'passwords') await this.loadPasswords();
-    if (section === 'passkeys') await this.loadOtpAccounts();
+    if (section === 'passkeys') {
+      await this.loadOtpAccounts(true);
+      await this.loadPasskeyAccounts(true);
+      this.renderAuthenticatorAccounts();
+    }
+    if (section === 'notes') await this.loadNotes();
     if (section === 'security') {
       await this.loadSecurity();
       this.startSecurityRefresh();
@@ -180,6 +254,8 @@ class CasperVault {
   updateHeader(status) {
     document.getElementById('passwordCount').textContent = status.entryCount || 0;
     document.getElementById('totalPasswords').textContent = status.entryCount || 0;
+    document.getElementById('noteCount').textContent = status.noteCount || 0;
+    document.getElementById('passkeyCount').textContent = Number(status.otpCount || 0) + Number(status.passkeyCount || 0);
     document.getElementById('vaultStatus').querySelector('.status-icon').textContent = status.isUnlocked ? '🔓' : '🔒';
     document.getElementById('vaultStatus').querySelector('.status-text').textContent = status.isUnlocked ? 'Unlocked' : 'Locked';
     document.getElementById('lastSync').textContent = new Date().toLocaleTimeString();
@@ -196,6 +272,8 @@ class CasperVault {
     this.passwords = response.data || [];
     document.getElementById('passwordCount').textContent = this.passwords.length;
     document.getElementById('totalPasswords').textContent = this.passwords.length;
+    document.getElementById('passkeyCount').textContent = this.otpEntries.length + this.passkeyEntries.length;
+    document.getElementById('noteCount').textContent = this.notes.length;
     this.renderPasswords();
   }
 
@@ -471,7 +549,7 @@ class CasperVault {
   }
 
   async verifySensitiveAction(reason) {
-    const pin = window.prompt('Security verification: enter your CASPER PIN');
+    const pin = await this.promptForHiddenPin('Security Verification', 'Enter your CASPER PIN');
     if (!pin) return false;
     const response = await this.sendMessage({ type: 'VERIFY_PIN', pin, reason });
     if (!response.success) {
@@ -479,6 +557,87 @@ class CasperVault {
       return false;
     }
     return true;
+  }
+
+  async changePinFlow() {
+    const oldPin = await this.promptForHiddenPin('Change PIN', 'Enter current PIN');
+    if (!oldPin) return;
+    const newPin = await this.promptForHiddenPin('Change PIN', 'Enter new PIN (4-6 digits)');
+    if (!newPin) return;
+    const confirmPin = await this.promptForHiddenPin('Change PIN', 'Confirm new PIN');
+    if (!confirmPin) return;
+
+    if (!/^\d{4,6}$/.test(newPin)) {
+      this.toast('New PIN must be 4-6 digits', 'error');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      this.toast('New PIN and confirmation do not match', 'error');
+      return;
+    }
+    if (oldPin === newPin) {
+      this.toast('New PIN must be different from current PIN', 'error');
+      return;
+    }
+
+    const response = await this.sendMessage({ type: 'CHANGE_PIN', oldPin, newPin });
+    if (!response.success) {
+      if (response.requiresUnlock) return this.handleLockedSession();
+      this.toast(response.message || 'Failed to change PIN', 'error');
+      return;
+    }
+    this.toast('PIN changed successfully', 'success');
+  }
+
+  promptForHiddenPin(title, message) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.style.display = 'flex';
+      overlay.style.zIndex = '22000';
+
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.style.maxWidth = '420px';
+      modal.innerHTML = `
+        <div class="modal-header">
+          <h3>${title}</h3>
+        </div>
+        <div class="modal-content">
+          <div class="form-group">
+            <label>${message}</label>
+            <input id="pinPromptInput" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="••••">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" id="pinPromptCancel">Cancel</button>
+          <button class="primary-btn" id="pinPromptOk">Verify</button>
+        </div>
+      `;
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      const input = modal.querySelector('#pinPromptInput');
+      const cancelBtn = modal.querySelector('#pinPromptCancel');
+      const okBtn = modal.querySelector('#pinPromptOk');
+
+      const cleanup = (value) => {
+        overlay.remove();
+        resolve(value);
+      };
+
+      cancelBtn.addEventListener('click', () => cleanup(null));
+      okBtn.addEventListener('click', () => cleanup((input.value || '').trim()));
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) cleanup(null);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') cleanup((input.value || '').trim());
+        if (e.key === 'Escape') cleanup(null);
+      });
+
+      input?.focus();
+    });
   }
 
   makePassword() {
@@ -497,7 +656,7 @@ class CasperVault {
     return out;
   }
 
-  async loadOtpAccounts() {
+  async loadOtpAccounts(skipRender = false) {
     const response = await this.sendMessage({ type: 'GET_OTP_CODES' });
     if (!response.success) {
       if (response.requiresUnlock) return this.handleLockedSession();
@@ -506,27 +665,53 @@ class CasperVault {
     }
 
     this.otpEntries = response.data || [];
-    this.renderOtpAccounts();
+    document.getElementById('passkeyCount').textContent = this.otpEntries.length + this.passkeyEntries.length;
+    if (!skipRender) this.renderAuthenticatorAccounts();
   }
 
-  renderOtpAccounts() {
+  async loadPasskeyAccounts(skipRender = false) {
+    const response = await this.sendMessage({ type: 'GET_PASSKEYS' });
+    if (!response.success) {
+      if (response.requiresUnlock) return this.handleLockedSession();
+      this.toast(response.message || 'Failed to load passkeys', 'error');
+      return;
+    }
+    this.passkeyEntries = response.data || [];
+    document.getElementById('passkeyCount').textContent = this.otpEntries.length + this.passkeyEntries.length;
+    if (!skipRender) this.renderAuthenticatorAccounts();
+  }
+
+  renderAuthenticatorAccounts() {
     const grid = document.getElementById('passkeysGrid');
     grid.innerHTML = '';
 
-    const list = this.otpEntries.filter((a) => {
-      const hay = `${a.issuer} ${a.label} ${a.type}`.toLowerCase();
-      return hay.includes(this.otpSearch);
-    });
+    const otpList = this.otpEntries
+      .filter((a) => {
+        const hay = `${a.issuer} ${a.label} ${a.type}`.toLowerCase();
+        return hay.includes(this.otpSearch);
+      })
+      .map((item) => ({ kind: 'otp', item }));
+
+    const passkeyList = this.passkeyEntries
+      .filter((p) => {
+        const hay = `${p.serviceName} ${p.userIdentifier} ${p.source}`.toLowerCase();
+        return hay.includes(this.otpSearch);
+      })
+      .map((item) => ({ kind: 'passkey', item }));
+
+    const list = [...passkeyList, ...otpList];
 
     if (!list.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.innerHTML = '<span class="empty-icon">⏱️</span><h3>No OTP Accounts</h3><p>Add accounts from QR/otpauth data.</p>';
+      empty.innerHTML = '<span class="empty-icon">🎫</span><h3>No Passkeys/OTP Accounts</h3><p>Add OTP accounts or save passkeys from supported sites.</p>';
       grid.appendChild(empty);
       return;
     }
 
-    list.forEach((item) => {
+    list.forEach((entry) => {
+      const isOtp = entry.kind === 'otp';
+      const item = entry.item;
       const card = document.createElement('div');
       card.className = 'password-item';
 
@@ -535,48 +720,53 @@ class CasperVault {
 
       const icon = document.createElement('div');
       icon.className = 'password-favicon';
-      icon.textContent = item.type === 'hotp' ? 'H' : 'T';
+      icon.textContent = isOtp ? (item.type === 'hotp' ? 'H' : 'T') : '🔐';
 
       const title = document.createElement('div');
       title.className = 'password-title';
-      title.textContent = `${item.issuer} (${item.label})`;
+      title.textContent = isOtp ? `${item.issuer} (${item.label})` : `${item.serviceName} (${item.userIdentifier})`;
 
       const actions = document.createElement('div');
       actions.className = 'password-actions';
       actions.appendChild(this.iconButton('📋', async () => {
-        await navigator.clipboard.writeText(item.code);
-        this.toast('OTP copied', 'success');
+        const value = isOtp ? item.code : item.credentialId;
+        await navigator.clipboard.writeText(String(value || ''));
+        this.toast(isOtp ? 'OTP copied' : 'Passkey ID copied', 'success');
       }));
-      actions.appendChild(this.iconButton('✅', async () => {
-        const input = window.prompt('Enter OTP code to verify:');
-        if (!input) return;
-        const verify = await this.sendMessage({ type: 'VERIFY_OTP_CODE', id: item.id, code: input });
-        if (!verify.success) {
-          this.toast(verify.message || 'OTP verification failed', 'error');
-          return;
-        }
-        this.toast(verify.message || 'OTP verified', 'success');
-      }));
-
-      if (item.type === 'hotp') {
-        actions.appendChild(this.iconButton('➕', async () => {
-          const inc = await this.sendMessage({ type: 'INCREMENT_HOTP', id: item.id });
-          if (!inc.success) {
-            this.toast(inc.message || 'Failed to increment HOTP', 'error');
+      if (isOtp) {
+        actions.appendChild(this.iconButton('✅', async () => {
+          const input = window.prompt('Enter OTP code to verify:');
+          if (!input) return;
+          const verify = await this.sendMessage({ type: 'VERIFY_OTP_CODE', id: item.id, code: input });
+          if (!verify.success) {
+            this.toast(verify.message || 'OTP verification failed', 'error');
             return;
           }
-          await this.loadOtpAccounts();
+          this.toast(verify.message || 'OTP verified', 'success');
         }));
+
+        if (item.type === 'hotp') {
+          actions.appendChild(this.iconButton('➕', async () => {
+            const inc = await this.sendMessage({ type: 'INCREMENT_HOTP', id: item.id });
+            if (!inc.success) {
+              this.toast(inc.message || 'Failed to increment HOTP', 'error');
+              return;
+            }
+            await this.loadOtpAccounts();
+          }));
+        }
       }
 
       actions.appendChild(this.iconButton('🗑️', async () => {
-        if (!window.confirm('Delete this OTP account?')) return;
-        const del = await this.sendMessage({ type: 'DELETE_OTP_ACCOUNT', id: item.id });
+        if (!window.confirm(`Delete this ${isOtp ? 'OTP account' : 'passkey'}?`)) return;
+        const del = await this.sendMessage({ type: isOtp ? 'DELETE_OTP_ACCOUNT' : 'DELETE_PASSKEY', id: item.id });
         if (!del.success) {
-          this.toast(del.message || 'Failed to delete OTP', 'error');
+          this.toast(del.message || `Failed to delete ${isOtp ? 'OTP' : 'passkey'}`, 'error');
           return;
         }
-        await this.loadOtpAccounts();
+        await this.loadOtpAccounts(true);
+        await this.loadPasskeyAccounts(true);
+        this.renderAuthenticatorAccounts();
       }));
 
       header.appendChild(icon);
@@ -587,10 +777,12 @@ class CasperVault {
       info.className = 'password-info';
       const code = document.createElement('div');
       code.className = 'password-username';
-      code.textContent = `Code: ${item.code}`;
+      code.textContent = isOtp ? `Code: ${item.code}` : `Credential ID: ${String(item.credentialId || '').slice(0, 22)}...`;
       const meta = document.createElement('div');
       meta.className = 'password-url';
-      meta.textContent = item.type === 'totp' ? `Refresh in ${item.remaining}s` : `Counter: ${item.counter}`;
+      meta.textContent = isOtp
+        ? (item.type === 'totp' ? `Refresh in ${item.remaining}s` : `Counter: ${item.counter}`)
+        : `Source: ${item.source || 'webauthn'}`;
 
       info.appendChild(code);
       info.appendChild(meta);
@@ -637,7 +829,189 @@ class CasperVault {
     }
 
     this.toast('OTP account added', 'success');
-    await this.loadOtpAccounts();
+    await this.loadOtpAccounts(true);
+    await this.loadPasskeyAccounts(true);
+    this.renderAuthenticatorAccounts();
+  }
+
+  async addSitePasskeyFlow() {
+    const serviceName = (window.prompt('Site/domain (example: dummy-auth.local):', 'dummy-auth.local') || '').trim();
+    if (!serviceName) return;
+    const userIdentifier = (window.prompt('Identifier (email/mobile):', '') || '').trim();
+    if (!userIdentifier) return;
+    const credentialId = (window.prompt('Credential ID:', '') || '').trim();
+    if (!credentialId) {
+      this.toast('Credential ID is required', 'error');
+      return;
+    }
+
+    const result = await this.sendMessage({
+      type: 'SAVE_PASSKEY',
+      passkey: {
+        serviceName,
+        userIdentifier,
+        credentialId,
+        source: 'manual',
+      },
+    });
+    if (!result.success) {
+      this.toast(result.message || 'Failed to save passkey', 'error');
+      return;
+    }
+    this.toast(result.updated ? 'Passkey updated' : 'Passkey saved', 'success');
+    await this.loadOtpAccounts(true);
+    await this.loadPasskeyAccounts(true);
+    this.renderAuthenticatorAccounts();
+  }
+
+  async loadNotes() {
+    const response = await this.sendMessage({ type: 'GET_NOTES' });
+    if (!response.success) {
+      if (response.requiresUnlock) return this.handleLockedSession();
+      this.toast(response.message || 'Failed to load notes', 'error');
+      return;
+    }
+    this.notes = response.data || [];
+    document.getElementById('noteCount').textContent = this.notes.length;
+    document.getElementById('passkeyCount').textContent = this.otpEntries.length + this.passkeyEntries.length;
+    this.renderNotes();
+  }
+
+  renderNotes() {
+    const grid = document.getElementById('notesGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const list = this.notes.filter((n) => {
+      const hay = `${n.title} ${n.content} ${(n.tags || []).join(' ')}`.toLowerCase();
+      return hay.includes(this.noteSearch);
+    });
+
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.innerHTML = '<span class="empty-icon">📝</span><h3>No Secure Notes</h3><p>Add encrypted notes for recovery steps, secrets and reminders.</p>';
+      grid.appendChild(empty);
+      return;
+    }
+
+    list.forEach((note) => {
+      const card = document.createElement('div');
+      card.className = 'password-item';
+
+      const header = document.createElement('div');
+      header.className = 'password-header';
+
+      const icon = document.createElement('div');
+      icon.className = 'password-favicon';
+      icon.textContent = '📝';
+
+      const title = document.createElement('div');
+      title.className = 'password-title';
+      title.textContent = note.title;
+
+      const actions = document.createElement('div');
+      actions.className = 'password-actions';
+      actions.appendChild(this.iconButton('📋', async (e) => {
+        e.stopPropagation();
+        await navigator.clipboard.writeText(note.content || '');
+        this.toast('Note copied', 'success');
+      }));
+      actions.appendChild(this.iconButton('✏️', async (e) => {
+        e.stopPropagation();
+        this.showNoteModal(note);
+      }));
+      actions.appendChild(this.iconButton('🗑️', async (e) => {
+        e.stopPropagation();
+        if (!window.confirm('Delete this note?')) return;
+        const del = await this.sendMessage({ type: 'DELETE_NOTE', id: note.id });
+        if (!del.success) {
+          this.toast(del.message || 'Delete failed', 'error');
+          return;
+        }
+        this.toast('Note deleted', 'success');
+        await this.loadNotes();
+      }));
+
+      header.appendChild(icon);
+      header.appendChild(title);
+      header.appendChild(actions);
+
+      const info = document.createElement('div');
+      info.className = 'password-info';
+      const preview = document.createElement('div');
+      preview.className = 'password-username';
+      const raw = String(note.content || '');
+      preview.textContent = raw.length > 110 ? `${raw.slice(0, 110)}...` : raw;
+      const meta = document.createElement('div');
+      meta.className = 'password-url';
+      meta.textContent = `Updated: ${new Date(note.updatedAt || note.createdAt || Date.now()).toLocaleString()}`;
+      info.appendChild(preview);
+      info.appendChild(meta);
+
+      card.appendChild(header);
+      card.appendChild(info);
+      grid.appendChild(card);
+    });
+  }
+
+  showNoteModal(existing = null) {
+    this.editingNoteId = existing?.id || null;
+    const overlay = document.getElementById('noteModalOverlay');
+    const title = document.getElementById('noteModalTitle');
+    const titleInput = document.getElementById('noteModalInputTitle');
+    const contentInput = document.getElementById('noteModalInputContent');
+    if (!overlay || !title || !titleInput || !contentInput) return;
+    title.textContent = existing ? 'Edit Secure Note' : 'Add Secure Note';
+    titleInput.value = existing?.title || '';
+    contentInput.value = existing?.content || '';
+    overlay.style.display = 'flex';
+    titleInput.focus();
+  }
+
+  hideNoteModal() {
+    const overlay = document.getElementById('noteModalOverlay');
+    if (overlay) overlay.style.display = 'none';
+    this.editingNoteId = null;
+    if (document.getElementById('noteModalTitle')) {
+      document.getElementById('noteModalTitle').textContent = 'Add Secure Note';
+    }
+    if (document.getElementById('noteModalInputTitle')) {
+      document.getElementById('noteModalInputTitle').value = '';
+    }
+    if (document.getElementById('noteModalInputContent')) {
+      document.getElementById('noteModalInputContent').value = '';
+    }
+  }
+
+  async saveNoteFromModal() {
+    const wasEditing = Boolean(this.editingNoteId);
+    const title = (document.getElementById('noteModalInputTitle')?.value || '').trim();
+    const content = (document.getElementById('noteModalInputContent')?.value || '').trim();
+    if (!title || !content) {
+      this.toast('Note title and content are required', 'error');
+      return;
+    }
+    let result;
+    if (this.editingNoteId) {
+      result = await this.sendMessage({
+        type: 'UPDATE_NOTE',
+        id: this.editingNoteId,
+        updates: { title, content },
+      });
+    } else {
+      result = await this.sendMessage({
+        type: 'ADD_NOTE',
+        note: { title, content },
+      });
+    }
+    if (!result.success) {
+      this.toast(result.message || 'Failed to save note', 'error');
+      return;
+    }
+    this.hideNoteModal();
+    this.toast(wasEditing ? 'Note updated' : 'Note saved', 'success');
+    await this.loadNotes();
   }
 
   startOtpRefresh() {
@@ -645,7 +1019,8 @@ class CasperVault {
     this.refreshTimer = setInterval(async () => {
       if (this.currentSection === 'passkeys') {
         try {
-          await this.loadOtpAccounts();
+          await this.loadOtpAccounts(true);
+          this.renderAuthenticatorAccounts();
         } catch {
           // Keep interval alive even if runtime is temporarily unavailable.
         }
@@ -774,14 +1149,58 @@ class CasperVault {
   }
 
   renderSiteRiskSummary(rows) {
+    this.siteRiskRows = Array.isArray(rows) ? rows : [];
+    const indicator = document.getElementById('siteRiskStatusIndicator');
+    const statusText = document.getElementById('siteRiskStatusText');
+    const subtext = document.getElementById('siteRiskSubtext');
+    const totalSites = document.getElementById('siteRiskTotalSites');
+    const totalBreaches = document.getElementById('siteRiskTotalBreaches');
+    const totalWarnings = document.getElementById('siteRiskTotalWarnings');
+
+    const sites = this.siteRiskRows.length;
+    const breaches = this.siteRiskRows.reduce((sum, r) => sum + Number(r.breachAlerts || 0), 0);
+    const warnings = this.siteRiskRows.reduce((sum, r) => sum + Number(r.warningAlerts || 0), 0);
+
+    if (totalSites) totalSites.textContent = String(sites);
+    if (totalBreaches) totalBreaches.textContent = String(breaches);
+    if (totalWarnings) totalWarnings.textContent = String(warnings);
+
+    if (indicator) indicator.className = `status-indicator${breaches > 0 || warnings > 0 ? ' warning' : ''}`;
+    if (statusText) {
+      statusText.textContent =
+        breaches > 0
+          ? `${breaches} site breach alert${breaches > 1 ? 's' : ''}`
+          : warnings > 0
+            ? `${warnings} site warning${warnings > 1 ? 's' : ''}`
+            : 'No active site risks';
+    }
+    if (subtext) {
+      subtext.textContent =
+        sites > 0
+          ? `Tracking ${sites} site${sites > 1 ? 's' : ''}. Open details for per-site risk breakdown.`
+          : 'No site-level incidents recorded yet.';
+    }
+  }
+
+  openSiteRiskModal() {
+    const overlay = document.getElementById('siteRiskModalOverlay');
+    const summary = document.getElementById('siteRiskDetailsSummary');
     const root = document.getElementById('siteRiskSummary');
-    if (!root) return;
-    if (!rows.length) {
+    if (!overlay || !summary || !root) return;
+
+    if (!this.siteRiskRows.length) {
+      summary.textContent = 'No site-level security data yet.';
       root.innerHTML = '<p>No site-level security data yet.</p>';
+      overlay.style.display = 'flex';
       return;
     }
+
+    const breaches = this.siteRiskRows.reduce((sum, r) => sum + Number(r.breachAlerts || 0), 0);
+    const warnings = this.siteRiskRows.reduce((sum, r) => sum + Number(r.warningAlerts || 0), 0);
+    summary.textContent = `Sites: ${this.siteRiskRows.length} | Breaches: ${breaches} | Warnings: ${warnings}`;
     root.innerHTML = '';
-    rows.slice(0, 12).forEach((row) => {
+
+    this.siteRiskRows.slice(0, 25).forEach((row) => {
       const node = document.createElement('div');
       node.className = 'site-risk-row';
       const updated = row.lastEventAt ? new Date(row.lastEventAt).toLocaleString() : 'N/A';
@@ -792,6 +1211,13 @@ class CasperVault {
       `;
       root.appendChild(node);
     });
+
+    overlay.style.display = 'flex';
+  }
+
+  closeSiteRiskModal() {
+    const overlay = document.getElementById('siteRiskModalOverlay');
+    if (overlay) overlay.style.display = 'none';
   }
 
   async loadSettings() {
@@ -1006,6 +1432,7 @@ class CasperVault {
   closeDecoyDetailsModal() {
     const overlay = document.getElementById('decoyModalOverlay');
     if (overlay) overlay.style.display = 'none';
+    this.devDecoyPin = '';
   }
 
   openGuidelines() {
@@ -1039,36 +1466,78 @@ class CasperVault {
     await this.loadSecurity();
   }
 
-  async showDecoysDev() {
+  async showDecoysDev(kind = 'password') {
     const proceed = window.confirm(
-      'Developer mode: this will display plaintext decoy credentials for demo/testing. Continue?'
+      'Developer mode: this will display PIN-based decoy credentials for one selected website. Continue?'
     );
     if (!proceed) return;
-    const verified = await this.verifySensitiveAction('show_decoys_dev');
-    if (!verified) return;
-    const response = await this.sendMessage({ type: 'GET_DECOY_CREDENTIALS_DEV' });
+    const pin = await this.promptForHiddenPin('Developer Verification', 'Enter PIN to load decoy sites');
+    if (!pin) return;
+    const verify = await this.sendMessage({ type: 'VERIFY_PIN', pin, reason: 'show_decoys_dev' });
+    if (!verify.success) {
+      this.toast(verify.message || 'PIN verification failed', 'error');
+      return;
+    }
+
+    const response = await this.sendMessage({ type: 'GET_DECOY_SITES_DEV', pin, kind });
     if (!response.success) {
       if (String(response.message || '').toLowerCase().includes('unknown message type')) {
         this.toast('Extension updated. Reload extension and reopen vault tab.', 'error');
         return;
       }
-      if (response.requiresVerification) {
-        this.toast('PIN verification required', 'error');
-        return;
-      }
-      this.toast(response.message || 'Failed to load decoys', 'error');
+      this.toast(response.message || 'Failed to load decoy sites', 'error');
       return;
     }
-    const decoys = response.data || [];
-    if (!decoys.length) {
-      window.alert('No decoys generated yet.');
+    const sites = response.data || [];
+    if (!sites.length) {
+      window.alert('No decoy-enabled websites found yet.');
       return;
     }
+
+    this.devDecoyPin = pin;
     const summary = document.getElementById('decoyDetailsSummary');
     const list = document.getElementById('decoyDetailsList');
     const overlay = document.getElementById('decoyModalOverlay');
     if (!summary || !list || !overlay) return;
-    summary.textContent = `Total decoys: ${decoys.length}. Showing all entries.`;
+    summary.textContent = `Select a website to view its PIN-based ${kind} decoys (10 per website).`;
+    list.innerHTML = '';
+    sites.forEach((site, idx) => {
+      const row = document.createElement('div');
+      row.className = 'breach-row';
+      row.innerHTML = `
+        <div><strong>${idx + 1}. ${site}</strong></div>
+        <div><small>Click to view decoy set</small></div>
+      `;
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => this.loadDevDecoysForSite(site, kind));
+      list.appendChild(row);
+    });
+    overlay.style.display = 'flex';
+  }
+
+  async loadDevDecoysForSite(site, kind = 'password') {
+    if (!this.devDecoyPin) {
+      this.toast('PIN expired. Re-open Show Decoys (Dev).', 'error');
+      return;
+    }
+    const summary = document.getElementById('decoyDetailsSummary');
+    const list = document.getElementById('decoyDetailsList');
+    if (!summary || !list) return;
+
+    summary.textContent = `Loading decoys for ${site}...`;
+    const response = await this.sendMessage({
+      type: 'GET_DECOY_CREDENTIALS_DEV_FOR_SITE',
+      pin: this.devDecoyPin,
+      serviceName: site,
+      kind,
+      limit: 10,
+    });
+    if (!response.success) {
+      this.toast(response.message || `Failed to load decoys for ${site}`, 'error');
+      return;
+    }
+    const decoys = response.data || [];
+    summary.textContent = `${site}: ${decoys.length} PIN-based decoys`;
     list.innerHTML = '';
     decoys.forEach((d, idx) => {
       const row = document.createElement('div');
@@ -1081,7 +1550,6 @@ class CasperVault {
       `;
       list.appendChild(row);
     });
-    overlay.style.display = 'flex';
   }
 
   async triggerBreachTest() {
@@ -1128,9 +1596,435 @@ class CasperVault {
     this.toast('Recovery codes regenerated', 'success');
   }
 
+  async resetVaultFlow() {
+    const first = window.confirm(
+      'This will permanently remove all vault data in this browser profile. Continue?'
+    );
+    if (!first) return;
+    const typed = window.prompt('Type RESET to confirm vault reset:', '');
+    if (typed !== 'RESET') {
+      this.toast('Reset cancelled', 'info');
+      return;
+    }
+    const verified = await this.verifySensitiveAction('reset_vault');
+    if (!verified) return;
+
+    const response = await this.sendMessage({ type: 'RESET_VAULT' });
+    if (!response.success) {
+      this.toast(response.message || 'Vault reset failed', 'error');
+      return;
+    }
+    this.toast('Vault reset complete. Redirecting to setup...', 'success');
+    setTimeout(() => {
+      window.location.href = chrome.runtime.getURL('popup/popup.html');
+    }, 600);
+  }
+
   async lockVault() {
     await this.sendMessage({ type: 'LOCK_VAULT' });
     window.location.href = chrome.runtime.getURL('popup/popup.html');
+  }
+
+  injectTourLauncher() {
+    if (document.getElementById('tourLauncherBtn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'tourLauncherBtn';
+    btn.className = 'tour-launcher';
+    btn.type = 'button';
+    btn.textContent = 'Help Tour';
+    btn.addEventListener('click', () => this.startProductTour(false));
+    document.body.appendChild(btn);
+  }
+
+  async maybeStartFirstRunTour() {
+    try {
+      const data = await chrome.storage.local.get(['casperProductTourV1Done']);
+      if (data.casperProductTourV1Done) return;
+      await this.startProductTour(true);
+    } catch {
+      // Ignore storage errors and continue without blocking vault usage.
+    }
+  }
+
+  buildTourSteps() {
+    return [
+      {
+        section: 'passwords',
+        selector: '#lockVault',
+        title: 'Lock Vault',
+        body: 'Instantly locks your vault and requires PIN to unlock again.',
+      },
+      {
+        section: 'passwords',
+        selector: '.nav-item[data-section="passwords"]',
+        title: 'Passwords',
+        body: 'This section stores and manages all website credentials.',
+      },
+      {
+        section: 'passwords',
+        selector: '#passwordSearch',
+        title: 'Password Search',
+        body: 'Search saved credentials by title, username, or URL.',
+      },
+      {
+        section: 'passwords',
+        selector: '#addPasswordBtn',
+        title: 'Add Password',
+        body: 'Click here to add new credentials manually to the vault.',
+      },
+      {
+        section: 'passwords',
+        selector: '#modalUrl',
+        title: 'Add Password Form',
+        body: 'Enter website URL, username, password and optional notes.',
+        before: async () => this.showModal(),
+      },
+      {
+        section: 'passwords',
+        selector: '#generateModalPassword',
+        title: 'Generate in Form',
+        body: 'Generate a strong password directly inside the add-password form.',
+        before: async () => this.showModal(),
+      },
+      {
+        section: 'passwords',
+        selector: '#toggleModalPassword',
+        title: 'Show/Hide Password',
+        body: 'Toggle password visibility while entering credentials.',
+        before: async () => this.showModal(),
+      },
+      {
+        section: 'passwords',
+        selector: '#saveModal',
+        title: 'Save Password',
+        body: 'Saves a new credential or updates an existing one.',
+        before: async () => this.showModal(),
+        after: async () => this.hideModal(),
+      },
+      {
+        section: 'passkeys',
+        selector: '.nav-item[data-section="passkeys"]',
+        title: 'Authenticator',
+        body: 'Use this for OTP accounts (TOTP/HOTP).',
+      },
+      {
+        section: 'passkeys',
+        selector: '#passkeySearch',
+        title: 'OTP Search',
+        body: 'Filter OTP accounts quickly by issuer, label, or type.',
+      },
+      {
+        section: 'passkeys',
+        selector: '#addPasskeyBtn',
+        title: 'Add OTP',
+        body: 'Add an OTP account from otpauth URI or manual secret.',
+      },
+      {
+        section: 'passkeys',
+        selector: '#addSitePasskeyBtn',
+        title: 'Save Passkey',
+        body: 'Store passkey metadata (service, identifier, credential ID) inside CASPER vault.',
+      },
+      {
+        section: 'notes',
+        selector: '.nav-item[data-section="notes"]',
+        title: 'Secure Notes',
+        body: 'Create encrypted notes for recovery steps, backup secrets and incident playbooks.',
+      },
+      {
+        section: 'notes',
+        selector: '#addNoteBtn',
+        title: 'Add Note',
+        body: 'Create a new secure note stored in encrypted vault data.',
+      },
+      {
+        section: 'generator',
+        selector: '.nav-item[data-section="generator"]',
+        title: 'Password Generator',
+        body: 'Generate strong random passwords and copy them safely.',
+      },
+      {
+        section: 'security',
+        selector: '.nav-item[data-section="security"]',
+        title: 'Security Dashboard',
+        body: 'Monitor decoys, warnings, breaches, and incident response actions.',
+      },
+      {
+        section: 'security',
+        selector: '#breachTestBtn',
+        title: 'Trigger Breach Test',
+        body: 'Sends a test breach signal/email to validate alert flow.',
+      },
+      {
+        section: 'security',
+        selector: '#checkBreachNowBtn',
+        title: 'Check Breach Now',
+        body: 'Manually pull the latest decoy breach signals from backend.',
+      },
+      {
+        section: 'security',
+        selector: '#viewBreachDetailsBtn',
+        title: 'View Breach Details',
+        body: 'See event-level details: service, time, source, and decoy ID.',
+      },
+      {
+        section: 'security',
+        selector: '#viewSiteRiskBtn',
+        title: 'View Site Risk Summary',
+        body: 'Open per-site risk details including credentials, decoys, breaches and warnings.',
+      },
+      {
+        section: 'security',
+        selector: '#openGuidelinesBtn',
+        title: 'Security Response Guide',
+        body: 'Opens incident-response steps for warnings and breach alerts.',
+      },
+      {
+        section: 'security',
+        selector: '#showPasswordDecoysDevBtn',
+        title: 'Show Password Decoys (Dev)',
+        body: 'Developer-only demo view of password decoy usernames/passwords (PIN-gated).',
+      },
+      {
+        section: 'security',
+        selector: '#showPasskeyDecoysDevBtn',
+        title: 'Show Passkey Decoys (Dev)',
+        body: 'Developer-only demo view of passkey decoy usernames/credential IDs (PIN-gated).',
+      },
+      {
+        section: 'security',
+        selector: '#clearSiteAlertsBtn',
+        title: 'Clear Site Alerts',
+        body: 'Clear historical warning/breach alerts for one site after remediation.',
+      },
+      {
+        section: 'security',
+        selector: '#clearAllAlertsBtn',
+        title: 'Clear All Alerts',
+        body: 'Reset historical security alerts across all sites.',
+      },
+      {
+        section: 'security',
+        selector: '#exportVaultBtn',
+        title: 'Export Vault',
+        body: 'Export encrypted vault data snapshot for backup/reporting.',
+      },
+      {
+        section: 'security',
+        selector: '#viewLogsBtn',
+        title: 'View Security Logs',
+        body: 'Shows latest local security events and status messages.',
+      },
+      {
+        section: 'settings',
+        selector: '.nav-item[data-section="settings"]',
+        title: 'Settings',
+        body: 'Configure auto-lock, OTP policy, deception monitoring, and email alerts.',
+      },
+      {
+        section: 'settings',
+        selector: '#autoLockTime',
+        title: 'Auto-lock',
+        body: 'Controls inactivity timeout before vault auto-locks.',
+      },
+      {
+        section: 'settings',
+        selector: '#maxUnlockAttempts',
+        title: 'Max Unlock Attempts',
+        body: 'Sets allowed failed PIN tries before lockout starts.',
+      },
+      {
+        section: 'settings',
+        selector: '#honeyServerUrl',
+        title: 'Honey Server URL',
+        body: 'Backend endpoint for decoy registration and breach polling.',
+      },
+      {
+        section: 'settings',
+        selector: '#mailToEmail',
+        title: 'Alert Email',
+        body: 'Where CASPER sends warning, breach and test emails.',
+      },
+      {
+        section: 'settings',
+        selector: '#viewRecoveryCodesBtn',
+        title: 'Recovery Codes',
+        body: 'Backup unlock codes for emergency access. Store them offline.',
+      },
+      {
+        section: 'settings',
+        selector: '#regenerateRecoveryCodesBtn',
+        title: 'Regenerate Recovery Codes',
+        body: 'Creates fresh recovery codes and invalidates previous ones.',
+      },
+      {
+        section: 'settings',
+        selector: '#testEmailBtn',
+        title: 'Send Test Email',
+        body: 'Verifies your current email alert setup is working.',
+      },
+      {
+        section: 'security',
+        selector: '#changePinBtn',
+        title: 'Change PIN',
+        body: 'Rotate your master PIN to re-key vault access.',
+      },
+    ];
+  }
+
+  async startProductTour(firstRun = false) {
+    if (this.tour?.active) return;
+    this.tourSteps = this.buildTourSteps();
+    this.tour = {
+      active: true,
+      firstRun,
+      index: 0,
+      preparedIndex: -1,
+      overlay: null,
+      bubble: null,
+      highlighted: null,
+      onResize: null,
+      onScroll: null,
+    };
+    await this.sendMessage({ type: 'SET_TOUR_ACTIVE', active: true }).catch(() => {});
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tour-overlay';
+    const bubble = document.createElement('div');
+    bubble.className = 'tour-bubble';
+    overlay.appendChild(bubble);
+    document.body.appendChild(overlay);
+    this.tour.overlay = overlay;
+    this.tour.bubble = bubble;
+
+    this.tour.onResize = () => this.positionTourBubble();
+    this.tour.onScroll = () => this.positionTourBubble();
+    window.addEventListener('resize', this.tour.onResize);
+    window.addEventListener('scroll', this.tour.onScroll, true);
+
+    await this.renderTourStep();
+  }
+
+  async renderTourStep() {
+    if (!this.tour?.active) return;
+    const step = this.tourSteps[this.tour.index];
+    if (!step) {
+      await this.finishProductTour(true);
+      return;
+    }
+
+    if (this.tour.preparedIndex !== this.tour.index && typeof step.before === 'function') {
+      await step.before();
+      this.tour.preparedIndex = this.tour.index;
+    }
+
+    if (step.section) {
+      await this.switchSection(step.section);
+    }
+    const target = document.querySelector(step.selector);
+    if (!target) {
+      this.tour.index += 1;
+      await this.renderTourStep();
+      return;
+    }
+
+    if (this.tour.highlighted) {
+      this.tour.highlighted.classList.remove('tour-highlight');
+    }
+    target.classList.add('tour-highlight');
+    this.tour.highlighted = target;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+
+    const total = this.tourSteps.length;
+    const current = this.tour.index + 1;
+    this.tour.bubble.innerHTML = `
+      <div class="tour-meta">Step ${current} of ${total}</div>
+      <h4>${step.title}</h4>
+      <p>${step.body}</p>
+      <div class="tour-actions">
+        <button type="button" class="secondary-btn" id="tourSkipBtn">Skip</button>
+        <button type="button" class="secondary-btn" id="tourPrevBtn" ${this.tour.index === 0 ? 'disabled' : ''}>Back</button>
+        <button type="button" class="primary-btn" id="tourNextBtn">${this.tour.index === total - 1 ? 'Finish' : 'Next'}</button>
+      </div>
+    `;
+
+    this.tour.bubble.querySelector('#tourSkipBtn')?.addEventListener('click', async () => {
+      await this.runTourStepAfter(this.tour.index);
+      await this.finishProductTour(false);
+    });
+    this.tour.bubble.querySelector('#tourPrevBtn')?.addEventListener('click', async () => {
+      await this.runTourStepAfter(this.tour.index);
+      this.tour.index = Math.max(0, this.tour.index - 1);
+      await this.renderTourStep();
+    });
+    this.tour.bubble.querySelector('#tourNextBtn')?.addEventListener('click', async () => {
+      if (this.tour.index >= this.tourSteps.length - 1) {
+        await this.runTourStepAfter(this.tour.index);
+        await this.finishProductTour(true);
+        return;
+      }
+      await this.runTourStepAfter(this.tour.index);
+      this.tour.index += 1;
+      await this.renderTourStep();
+    });
+
+    requestAnimationFrame(() => this.positionTourBubble());
+    setTimeout(() => this.positionTourBubble(), 120);
+  }
+
+  positionTourBubble() {
+    if (!this.tour?.active || !this.tour.highlighted || !this.tour.bubble) return;
+    const rect = this.tour.highlighted.getBoundingClientRect();
+    const bubble = this.tour.bubble;
+    const margin = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const bw = bubble.offsetWidth || 320;
+    const bh = bubble.offsetHeight || 180;
+
+    let left = rect.left + rect.width / 2 - bw / 2;
+    let top = rect.bottom + margin;
+
+    if (left < margin) left = margin;
+    if (left + bw > vw - margin) left = vw - bw - margin;
+    if (top + bh > vh - margin) {
+      top = rect.top - bh - margin;
+    }
+    if (top < margin) top = margin;
+
+    bubble.style.left = `${Math.round(left)}px`;
+    bubble.style.top = `${Math.round(top)}px`;
+  }
+
+  async runTourStepAfter(index) {
+    const step = this.tourSteps[index];
+    if (!step || typeof step.after !== 'function') return;
+    try {
+      await step.after();
+    } catch {
+      // Keep tour alive if cleanup hook fails.
+    }
+  }
+
+  async finishProductTour(completed) {
+    if (!this.tour) return;
+    const wasFirstRun = this.tour.firstRun;
+    await this.runTourStepAfter(this.tour.index);
+    if (this.tour.highlighted) {
+      this.tour.highlighted.classList.remove('tour-highlight');
+    }
+    if (this.tour.onResize) window.removeEventListener('resize', this.tour.onResize);
+    if (this.tour.onScroll) window.removeEventListener('scroll', this.tour.onScroll, true);
+    this.tour.overlay?.remove();
+    this.tour = null;
+    await this.sendMessage({ type: 'SET_TOUR_ACTIVE', active: false }).catch(() => {});
+
+    if (wasFirstRun || completed) {
+      await chrome.storage.local.set({ casperProductTourV1Done: true });
+    }
+    if (completed) {
+      this.toast('Product tour completed', 'success');
+    }
   }
 
   toast(message, type = 'info') {

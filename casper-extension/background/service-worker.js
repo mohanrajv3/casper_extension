@@ -12,6 +12,9 @@ const EMAILJS_CONFIG = {
   senderEmail: 'remyreplies@gmail.com',
 };
 
+// Demo mode: disable lock behavior to avoid random re-locks during presentations.
+const DEMO_DISABLE_LOCKING = true;
+
 const session = {
   isUnlocked: false,
   key: null,
@@ -21,6 +24,9 @@ const session = {
   autoLockTimer: null,
   sensitiveVerifiedUntil: 0,
   breachPollTimer: null,
+  tourActive: false,
+  openViewCount: 0,
+  viewHandoffTimer: null,
 };
 
 const DEFAULT_SETTINGS = {
@@ -105,6 +111,73 @@ function randomRecoveryCode() {
   return `${out.slice(0, 5)}-${out.slice(5)}`;
 }
 
+function normalizeRecoveryText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function hashRecoveryAnswer(question, answer) {
+  return sha256Hex(`${normalizeRecoveryText(question)}::${normalizeRecoveryText(answer)}`);
+}
+
+function hexToBytes(hex) {
+  const clean = String(hex || '');
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(clean.substr(i * 2, 2), 16);
+  }
+  return out;
+}
+
+async function deriveRecoveryAesKey(answerHashes) {
+  const materialHex = await sha256Hex((answerHashes || []).join('|'));
+  return crypto.subtle.importKey('raw', hexToBytes(materialHex), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function encryptRecoveryPin(pin, answerHashes) {
+  const key = await deriveRecoveryAesKey(answerHashes);
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(String(pin || ''))
+  );
+  return {
+    iv: core.bytesToBase64(iv),
+    data: core.bytesToBase64(new Uint8Array(encrypted)),
+  };
+}
+
+async function decryptRecoveryPin(pinBundle, answerHashes) {
+  const key = await deriveRecoveryAesKey(answerHashes);
+  const iv = core.base64ToBytes(pinBundle.iv);
+  const ciphertext = core.base64ToBytes(pinBundle.data);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return new TextDecoder().decode(decrypted);
+}
+
+async function buildRecoveryConfig(recoveryQuestions, pin) {
+  const entries = Array.isArray(recoveryQuestions) ? recoveryQuestions : [];
+  const normalized = entries
+    .map((q) => ({
+      question: String(q?.question || '').trim(),
+      answer: String(q?.answer || '').trim(),
+    }))
+    .filter((q) => q.question && q.answer);
+
+  if (normalized.length < 2) {
+    return { enabled: false, questions: [], answerHashes: [], pinBundle: null };
+  }
+
+  const questions = normalized.map((e) => e.question);
+  const answerHashes = [];
+  for (const item of normalized) {
+    answerHashes.push(await hashRecoveryAnswer(item.question, item.answer));
+  }
+  const pinBundle = await encryptRecoveryPin(pin, answerHashes);
+  return { enabled: true, questions, answerHashes, pinBundle };
+}
+
 async function generateRecoveryCodeBundle(count = RECOVERY_CODE_COUNT) {
   const plaintext = [];
   const hashes = [];
@@ -154,6 +227,23 @@ function makeDecoyVariants(username, password, count) {
     variants.push({ username: userDecoy, password: passDecoy });
   }
 
+  return variants;
+}
+
+function makePasskeyDecoyVariants(userIdentifier, credentialId, count) {
+  const safeCount = Math.max(1, Math.min(Number(count || 3), 5));
+  const suffixes = ['pkA', 'pkB', 'pkC', 'pkD', 'pkE'];
+  const userBase = String(userIdentifier || '').trim();
+  const credentialBase = String(credentialId || '').trim();
+  const variants = [];
+
+  for (let i = 0; i < safeCount; i++) {
+    const decoyUser = userBase.includes('@')
+      ? userBase.replace('@', `+pkshadow${i + 1}@`)
+      : `${userBase}_pkshadow${i + 1}`;
+    const decoyCredential = `${credentialBase}_${suffixes[i % suffixes.length]}_${i + 1}`;
+    variants.push({ username: decoyUser, password: decoyCredential });
+  }
   return variants;
 }
 
@@ -376,12 +466,21 @@ function normalizeVault(vault) {
   };
 }
 
-function clearSession() {
+function clearSession(force = false) {
+  if (DEMO_DISABLE_LOCKING && !force) {
+    return;
+  }
   session.isUnlocked = false;
   session.key = null;
   session.vaultData = null;
   session.unlockAt = null;
   session.sensitiveVerifiedUntil = 0;
+  session.tourActive = false;
+  session.openViewCount = 0;
+  if (session.viewHandoffTimer) {
+    clearTimeout(session.viewHandoffTimer);
+    session.viewHandoffTimer = null;
+  }
   if (session.autoLockTimer) {
     clearTimeout(session.autoLockTimer);
     session.autoLockTimer = null;
@@ -393,13 +492,25 @@ function clearSession() {
 }
 
 function resetAutoLock() {
-  if (!session.isUnlocked || !session.vaultData) return;
-  if (session.autoLockTimer) clearTimeout(session.autoLockTimer);
-  const minutes = Number(session.vaultData.settings?.autoLockMinutes || DEFAULT_SETTINGS.autoLockMinutes);
-  if (minutes <= 0) return;
-  session.autoLockTimer = setTimeout(() => {
-    clearSession();
-  }, minutes * 60 * 1000);
+  // Session lock mode: lock when extension view closes (popup/vault), not by inactivity timer.
+  if (session.autoLockTimer) {
+    clearTimeout(session.autoLockTimer);
+    session.autoLockTimer = null;
+  }
+}
+
+function setTourActive(active) {
+  const next = Boolean(active);
+  session.tourActive = next;
+  if (next) {
+    if (session.autoLockTimer) {
+      clearTimeout(session.autoLockTimer);
+      session.autoLockTimer = null;
+    }
+  } else {
+    resetAutoLock();
+  }
+  return { success: true, tourActive: session.tourActive };
 }
 
 async function loadCloud() {
@@ -426,6 +537,27 @@ async function getLocalAuthPolicy() {
     maxUnlockAttempts: Math.max(3, Number(policy.maxUnlockAttempts || DEFAULT_SETTINGS.auth.maxUnlockAttempts)),
     lockoutMinutes: Math.max(1, Number(policy.lockoutMinutes || DEFAULT_SETTINGS.auth.lockoutMinutes)),
   };
+}
+
+async function getDemoUnlockPin() {
+  const data = await chrome.storage.local.get(['demoUnlockPin']);
+  return String(data.demoUnlockPin || '').trim();
+}
+
+async function setDemoUnlockPin(pin) {
+  if (!DEMO_DISABLE_LOCKING) return;
+  await chrome.storage.local.set({ demoUnlockPin: String(pin || '').trim() });
+}
+
+async function clearDemoUnlockPin() {
+  await chrome.storage.local.remove(['demoUnlockPin']);
+}
+
+async function restoreDemoSessionIfNeeded() {
+  if (!DEMO_DISABLE_LOCKING || session.isUnlocked) return;
+  const pin = await getDemoUnlockPin();
+  if (!/^\d{4,6}$/.test(pin)) return;
+  await unlockVault(pin);
 }
 
 async function persistVault() {
@@ -563,6 +695,7 @@ async function sendWelcomeEmailIfConfigured(toEmail) {
 }
 
 async function getVaultStatus() {
+  await restoreDemoSessionIfNeeded();
   const cloud = await loadCloud();
   const entryCount = session.vaultData?.passwords?.length || 0;
 
@@ -572,13 +705,16 @@ async function getVaultStatus() {
     isUnlocked: session.isUnlocked,
     entryCount,
     otpCount: session.vaultData?.otpAccounts?.length || 0,
+    passkeyCount: session.vaultData?.passkeys?.length || 0,
+    noteCount: session.vaultData?.notes?.length || 0,
   };
 }
 
-async function initializeVault(pin, alertEmail = '') {
+async function initializeVault(pin, alertEmail = '', recoveryQuestions = []) {
   if (!/^\d{4,6}$/.test(String(pin || ''))) {
     return { success: false, message: 'PIN must be 4-6 digits' };
   }
+  const recovery = await buildRecoveryConfig(recoveryQuestions, String(pin));
 
   const recoveryCodes = await generateRecoveryCodeBundle();
   const detectionSecrets = core.generateDetectionSecrets();
@@ -634,6 +770,12 @@ async function initializeVault(pin, alertEmail = '') {
       accessCount: 0,
       breachAlerts: [],
     },
+    recovery: {
+      enabled: Boolean(recovery.enabled),
+      questions: recovery.questions,
+      answerHashes: recovery.answerHashes,
+      pinBundle: recovery.pinBundle,
+    },
   };
 
   await saveCloud(cloudData);
@@ -650,6 +792,7 @@ async function initializeVault(pin, alertEmail = '') {
   session.vaultData = vault;
   session.isUnlocked = true;
   session.unlockAt = now();
+  await setDemoUnlockPin(pin);
   resetAutoLock();
 
   addSecurityEvent('vault_initialized', 'Vault initialized');
@@ -664,6 +807,51 @@ async function initializeVault(pin, alertEmail = '') {
       recoveryCodes: recoveryCodes.plaintext,
     },
   };
+}
+
+async function getRecoveryQuestions() {
+  const cloudData = await loadCloud();
+  const questions = cloudData?.recovery?.questions || [];
+  if (!questions.length) {
+    return { success: false, message: 'Recovery questions are not configured' };
+  }
+  return { success: true, data: { questions } };
+}
+
+async function unlockWithRecoveryAnswers(answers = []) {
+  const cloudData = await loadCloud();
+  if (!cloudData) return { success: false, message: 'Vault not initialized' };
+  const recovery = cloudData.recovery || {};
+  const questions = Array.isArray(recovery.questions) ? recovery.questions : [];
+  const expectedHashes = Array.isArray(recovery.answerHashes) ? recovery.answerHashes : [];
+  const pinBundle = recovery.pinBundle;
+  if (!questions.length || !expectedHashes.length || !pinBundle) {
+    return { success: false, message: 'Recovery is not configured' };
+  }
+  if (!Array.isArray(answers) || answers.length !== questions.length) {
+    return { success: false, message: 'All recovery answers are required' };
+  }
+
+  const derived = [];
+  for (let i = 0; i < questions.length; i++) {
+    derived.push(await hashRecoveryAnswer(questions[i], answers[i]));
+  }
+  const valid = derived.every((h, i) => h === expectedHashes[i]);
+  if (!valid) {
+    return { success: false, message: 'Recovery answers do not match' };
+  }
+
+  try {
+    const pin = await decryptRecoveryPin(pinBundle, derived);
+    const result = await unlockVault(pin);
+    if (result.success) {
+      addSecurityEvent('vault_recovered', 'Vault unlocked using recovery questions');
+      await persistVault();
+    }
+    return result;
+  } catch (error) {
+    return { success: false, message: `Recovery unlock failed: ${error.message}` };
+  }
 }
 
 async function unlockVault(pin) {
@@ -695,6 +883,7 @@ async function unlockVault(pin) {
     session.userId = cloudData.userId;
     session.isUnlocked = true;
     session.unlockAt = now();
+    await setDemoUnlockPin(pin);
     resetAutoLock();
 
     cloudData.security.lastAccess = now();
@@ -739,6 +928,9 @@ async function unlockVault(pin) {
 }
 
 function lockVault() {
+  if (DEMO_DISABLE_LOCKING) {
+    return { success: true, message: 'Locking is disabled in demo mode' };
+  }
   clearSession();
   return { success: true, message: 'Vault locked' };
 }
@@ -786,6 +978,47 @@ async function verifySensitivePin(pin, reason = 'sensitive_action') {
   return { success: true };
 }
 
+async function changePin(oldPin, newPin) {
+  requireUnlocked();
+  if (!/^\d{4,6}$/.test(String(oldPin || '')) || !/^\d{4,6}$/.test(String(newPin || ''))) {
+    return { success: false, message: 'PIN must be 4-6 digits' };
+  }
+  if (String(oldPin) === String(newPin)) {
+    return { success: false, message: 'New PIN must be different from current PIN' };
+  }
+
+  const validOldPin = await verifyPinValue(String(oldPin));
+  if (!validOldPin) {
+    addSecurityEvent('pin_change_failed', 'PIN change failed (invalid current PIN)');
+    await persistVault();
+    return { success: false, message: 'Current PIN is incorrect' };
+  }
+
+  const cloudData = await loadCloud();
+  if (!cloudData) return { success: false, message: 'Vault not initialized' };
+
+  const detectionSecrets = core.generateDetectionSecrets();
+  const salt = core.generateSalt();
+  const selectorSalt = core.generateSelectorSalt();
+  const { secret } = await core.selectSecret(detectionSecrets, String(newPin), selectorSalt);
+  const newKey = await core.deriveEncryptionKey(String(newPin), secret, salt);
+  const encryptedVault = await core.encryptJson(session.vaultData, newKey);
+
+  cloudData.casper.detectionSecrets = detectionSecrets.map((s) => core.bytesToBase64(s));
+  cloudData.casper.salt = core.bytesToBase64(salt);
+  cloudData.casper.selectorSalt = core.bytesToBase64(selectorSalt);
+  cloudData.vault.data = core.bytesToBase64(encryptedVault);
+  cloudData.vault.lastModified = now();
+  await saveCloud(cloudData);
+
+  session.key = newKey;
+  await setDemoUnlockPin(newPin);
+  addSecurityEvent('pin_changed', 'Master PIN changed and vault re-keyed');
+  await persistVault();
+
+  return { success: true, message: 'PIN changed successfully' };
+}
+
 function hasSensitiveVerification() {
   return session.sensitiveVerifiedUntil > now();
 }
@@ -822,6 +1055,7 @@ async function addPassword(entry) {
   const decoys = decoyVariants.map((d) => ({
     decoyId: makeId(16),
     parentCredentialId: clean.id,
+    parentType: 'password',
     serviceName: normalizeServiceName(clean.domain || extractDomain(clean.url) || 'unknown'),
     username: d.username,
     password: d.password,
@@ -889,6 +1123,7 @@ async function updatePassword(id, updates) {
     const decoys = decoyVariants.map((d) => ({
       decoyId: makeId(16),
       parentCredentialId: merged.id,
+      parentType: 'password',
       serviceName: normalizeServiceName(merged.domain || extractDomain(merged.url) || 'unknown'),
       username: d.username,
       password: d.password,
@@ -1030,6 +1265,189 @@ function validateOtpAccount(account, authSettings = DEFAULT_SETTINGS.auth) {
     createdAt: now(),
     updatedAt: now(),
   };
+}
+
+function sanitizePasskeyEntry(entry = {}) {
+  const serviceName = normalizeServiceName(entry.serviceName || entry.service || toDomain(entry.url) || 'unknown');
+  const userIdentifier = String(entry.userIdentifier || entry.username || '').trim();
+  const credentialId = String(entry.credentialId || '').trim();
+  if (!userIdentifier) throw new Error('Passkey user identifier is required');
+  if (!credentialId) throw new Error('Passkey credential ID is required');
+
+  return {
+    id: makeId(8),
+    serviceName,
+    userIdentifier,
+    credentialId,
+    source: String(entry.source || 'webauthn'),
+    createdAt: now(),
+    updatedAt: now(),
+    lastUsedAt: now(),
+  };
+}
+
+async function savePasskey(entry) {
+  requireUnlocked();
+  const normalized = sanitizePasskeyEntry(entry || {});
+  const existing = (session.vaultData.passkeys || []).find(
+    (p) =>
+      String(p.credentialId || '') === normalized.credentialId ||
+      (String(p.serviceName || '') === normalized.serviceName &&
+        String(p.userIdentifier || '') === normalized.userIdentifier)
+  );
+
+  if (existing) {
+    existing.credentialId = normalized.credentialId;
+    existing.source = normalized.source;
+    existing.updatedAt = now();
+    existing.lastUsedAt = now();
+    session.vaultData.decoyCredentials = session.vaultData.decoyCredentials.filter(
+      (d) => !(d.parentPasskeyId === existing.id && d.parentType === 'passkey')
+    );
+    const passkeyDecoys = makePasskeyDecoyVariants(
+      existing.userIdentifier,
+      existing.credentialId,
+      session.vaultData.settings?.deception?.decoyCount || 3
+    ).map((d) => ({
+      decoyId: makeId(16),
+      parentPasskeyId: existing.id,
+      parentType: 'passkey',
+      serviceName: normalizeServiceName(existing.serviceName || 'unknown'),
+      username: d.username,
+      password: d.password,
+      monitoringStatus: false,
+      createdAt: now(),
+      registeredAt: null,
+    }));
+    session.vaultData.decoyCredentials.push(...passkeyDecoys);
+    addSecurityEvent('passkey_updated', 'Passkey credential updated', {
+      service: existing.serviceName,
+      user: existing.userIdentifier,
+      source: existing.source,
+    });
+    const reg = await registerDecoysWithHoneyServer(passkeyDecoys, existing.serviceName || 'unknown');
+    addSecurityEvent('passkey_decoys_regenerated', 'Passkey decoys regenerated', {
+      passkeyId: existing.id,
+      count: passkeyDecoys.length,
+      registered: reg.successCount || 0,
+      failed: reg.failures?.length || 0,
+    });
+    await persistVault();
+    await maybeSetRecipientAndSendWelcome(existing.userIdentifier);
+    return { success: true, data: existing, updated: true };
+  }
+
+  session.vaultData.passkeys.push(normalized);
+  const passkeyDecoys = makePasskeyDecoyVariants(
+    normalized.userIdentifier,
+    normalized.credentialId,
+    session.vaultData.settings?.deception?.decoyCount || 3
+  ).map((d) => ({
+    decoyId: makeId(16),
+    parentPasskeyId: normalized.id,
+    parentType: 'passkey',
+    serviceName: normalizeServiceName(normalized.serviceName || 'unknown'),
+    username: d.username,
+    password: d.password,
+    monitoringStatus: false,
+    createdAt: now(),
+    registeredAt: null,
+  }));
+  session.vaultData.decoyCredentials.push(...passkeyDecoys);
+  addSecurityEvent('passkey_added', 'Passkey credential saved', {
+    service: normalized.serviceName,
+    user: normalized.userIdentifier,
+    source: normalized.source,
+  });
+  const reg = await registerDecoysWithHoneyServer(passkeyDecoys, normalized.serviceName || 'unknown');
+  addSecurityEvent('passkey_decoys_generated', 'Passkey decoys generated', {
+    passkeyId: normalized.id,
+    count: passkeyDecoys.length,
+    registered: reg.successCount || 0,
+    failed: reg.failures?.length || 0,
+  });
+  await persistVault();
+  await maybeSetRecipientAndSendWelcome(normalized.userIdentifier);
+  return { success: true, data: normalized, updated: false };
+}
+
+async function getPasskeys() {
+  requireUnlocked();
+  return { success: true, data: session.vaultData.passkeys || [] };
+}
+
+async function deletePasskey(id) {
+  requireUnlocked();
+  const before = session.vaultData.passkeys.length;
+  session.vaultData.passkeys = session.vaultData.passkeys.filter((p) => p.id !== id);
+  session.vaultData.decoyCredentials = session.vaultData.decoyCredentials.filter(
+    (d) => !(d.parentPasskeyId === id && d.parentType === 'passkey')
+  );
+  if (before === session.vaultData.passkeys.length) {
+    return { success: false, message: 'Passkey not found' };
+  }
+  addSecurityEvent('passkey_deleted', 'Passkey credential deleted', { id });
+  await persistVault();
+  return { success: true };
+}
+
+function sanitizeNoteEntry(entry = {}) {
+  const title = String(entry.title || '').trim();
+  const content = String(entry.content || '').trim();
+  if (!title) throw new Error('Note title is required');
+  if (!content) throw new Error('Note content is required');
+  return {
+    id: makeId(8),
+    title,
+    content,
+    tags: Array.isArray(entry.tags) ? entry.tags.map((t) => String(t || '').trim()).filter(Boolean) : [],
+    createdAt: now(),
+    updatedAt: now(),
+  };
+}
+
+async function addNote(entry) {
+  requireUnlocked();
+  const note = sanitizeNoteEntry(entry || {});
+  session.vaultData.notes.push(note);
+  addSecurityEvent('note_added', 'Secure note added', { id: note.id, title: note.title });
+  await persistVault();
+  return { success: true, data: note };
+}
+
+async function getNotes() {
+  requireUnlocked();
+  return { success: true, data: session.vaultData.notes || [] };
+}
+
+async function updateNote(id, updates = {}) {
+  requireUnlocked();
+  const idx = session.vaultData.notes.findIndex((n) => n.id === id);
+  if (idx < 0) return { success: false, message: 'Note not found' };
+  const existing = session.vaultData.notes[idx];
+  const merged = sanitizeNoteEntry({
+    ...existing,
+    ...updates,
+  });
+  merged.id = existing.id;
+  merged.createdAt = existing.createdAt || now();
+  merged.updatedAt = now();
+  session.vaultData.notes[idx] = merged;
+  addSecurityEvent('note_updated', 'Secure note updated', { id });
+  await persistVault();
+  return { success: true, data: merged };
+}
+
+async function deleteNote(id) {
+  requireUnlocked();
+  const before = session.vaultData.notes.length;
+  session.vaultData.notes = session.vaultData.notes.filter((n) => n.id !== id);
+  if (before === session.vaultData.notes.length) {
+    return { success: false, message: 'Note not found' };
+  }
+  addSecurityEvent('note_deleted', 'Secure note deleted', { id });
+  await persistVault();
+  return { success: true };
 }
 
 async function addOtpAccount(payload) {
@@ -1442,6 +1860,154 @@ async function getDecoyCredentialsDev() {
   return { success: true, data: decoys };
 }
 
+function pickBaseCredentialForService(serviceName) {
+  const site = normalizeServiceName(serviceName);
+  const passwords = session.vaultData?.passwords || [];
+  const exact = passwords.filter((p) => normalizeServiceName(p.domain || toDomain(p.url)) === site);
+  if (exact.length) {
+    return {
+      username: String(exact[0].username || 'user'),
+      password: String(exact[0].password || 'Password@123'),
+    };
+  }
+  const decoys = session.vaultData?.decoyCredentials || [];
+  const d = decoys.find((x) => normalizeServiceName(x.serviceName) === site);
+  if (d) {
+    return { username: String(d.username || 'user'), password: String(d.password || 'Password@123') };
+  }
+  return { username: 'user@example.com', password: 'Password@123' };
+}
+
+async function makePinBasedDecoyVariants(serviceName, pin, count = 10) {
+  const site = normalizeServiceName(serviceName);
+  const safeCount = Math.max(10, Math.min(Number(count || 10), 25));
+  const base = pickBaseCredentialForService(site);
+  const suffixes = ['#', '!', '@', '$', '%', '&', '*', '_', '+', '?'];
+  const out = [];
+
+  for (let i = 0; i < safeCount; i++) {
+    const seed = await sha256Hex(`${pin}|${site}|${base.username}|${base.password}|${i}`);
+    const uSeed = seed.slice(0, 4);
+    const pSeed = seed.slice(4, 10);
+
+    let username;
+    if (base.username.includes('@')) {
+      const parts = base.username.split('@');
+      const local = parts[0] || 'user';
+      const domain = parts.slice(1).join('@') || 'example.com';
+      username = `${local}+shadow${i + 1}${uSeed}@${domain}`;
+    } else {
+      username = `${base.username}_shadow${i + 1}_${uSeed}`;
+    }
+
+    const password = `${base.password}${suffixes[i % suffixes.length]}${pSeed}`;
+    out.push({
+      decoyId: `${site}-${i + 1}-${seed.slice(10, 18)}`,
+      serviceName: site,
+      username,
+      password,
+      monitoringStatus: true,
+    });
+  }
+  return out;
+}
+
+function pickBasePasskeyForService(serviceName) {
+  const site = normalizeServiceName(serviceName);
+  const passkeys = session.vaultData?.passkeys || [];
+  const exact = passkeys.filter((p) => normalizeServiceName(p.serviceName || 'unknown') === site);
+  if (exact.length) {
+    return {
+      userIdentifier: String(exact[0].userIdentifier || 'user@example.com'),
+      credentialId: String(exact[0].credentialId || makeId(12)),
+    };
+  }
+  const decoys = session.vaultData?.decoyCredentials || [];
+  const d = decoys.find((x) => normalizeServiceName(x.serviceName) === site && x.parentType === 'passkey');
+  if (d) {
+    return { userIdentifier: String(d.username || 'user@example.com'), credentialId: String(d.password || makeId(12)) };
+  }
+  return { userIdentifier: 'user@example.com', credentialId: makeId(12) };
+}
+
+async function makePinBasedPasskeyDecoyVariants(serviceName, pin, count = 10) {
+  const site = normalizeServiceName(serviceName);
+  const safeCount = Math.max(10, Math.min(Number(count || 10), 25));
+  const base = pickBasePasskeyForService(site);
+  const out = [];
+
+  for (let i = 0; i < safeCount; i++) {
+    const seed = await sha256Hex(`${pin}|passkey|${site}|${base.userIdentifier}|${base.credentialId}|${i}`);
+    const uSeed = seed.slice(0, 4);
+    const cSeed = seed.slice(4, 14);
+    let username;
+    if (base.userIdentifier.includes('@')) {
+      const parts = base.userIdentifier.split('@');
+      const local = parts[0] || 'user';
+      const domain = parts.slice(1).join('@') || 'example.com';
+      username = `${local}+pkshadow${i + 1}${uSeed}@${domain}`;
+    } else {
+      username = `${base.userIdentifier}_pkshadow${i + 1}_${uSeed}`;
+    }
+    const credentialId = `${base.credentialId}_pk_${cSeed}_${i + 1}`;
+    out.push({
+      decoyId: `${site}-pk-${i + 1}-${seed.slice(14, 22)}`,
+      serviceName: site,
+      username,
+      password: credentialId,
+      monitoringStatus: true,
+    });
+  }
+
+  return out;
+}
+
+async function verifyDevPinOrFail(pin) {
+  const value = String(pin || '').trim();
+  if (!/^\d{4,6}$/.test(value)) return { ok: false, message: 'PIN must be 4-6 digits' };
+  const valid = await verifyPinValue(value);
+  if (!valid) return { ok: false, message: 'PIN verification failed' };
+  return { ok: true };
+}
+
+async function getDecoySitesDev(pin, kind = 'password') {
+  requireUnlocked();
+  const verified = await verifyDevPinOrFail(pin);
+  if (!verified.ok) return { success: false, message: verified.message };
+  const mode = String(kind || 'password').toLowerCase();
+
+  const sites = new Set();
+  if (mode === 'passkey') {
+    for (const p of session.vaultData.passkeys || []) {
+      sites.add(normalizeServiceName(p.serviceName || 'unknown'));
+    }
+  } else {
+    for (const p of session.vaultData.passwords || []) {
+      sites.add(normalizeServiceName(p.domain || toDomain(p.url)));
+    }
+  }
+  for (const d of session.vaultData.decoyCredentials || []) {
+    const isPasskey = d.parentType === 'passkey';
+    if ((mode === 'passkey' && isPasskey) || (mode !== 'passkey' && !isPasskey)) {
+      sites.add(normalizeServiceName(d.serviceName || 'unknown'));
+    }
+  }
+  const list = Array.from(sites).filter(Boolean).sort();
+  return { success: true, data: list };
+}
+
+async function getDecoyCredentialsDevForSite(pin, serviceName, kind = 'password', limit = 10) {
+  requireUnlocked();
+  const verified = await verifyDevPinOrFail(pin);
+  if (!verified.ok) return { success: false, message: verified.message };
+  const site = normalizeServiceName(serviceName || '');
+  if (!site || site === 'unknown') return { success: false, message: 'Invalid site name' };
+  const decoys = String(kind || 'password').toLowerCase() === 'passkey'
+    ? await makePinBasedPasskeyDecoyVariants(site, String(pin), limit)
+    : await makePinBasedDecoyVariants(site, String(pin), limit);
+  return { success: true, data: decoys, site };
+}
+
 function toDomain(value) {
   try {
     return normalizeServiceName(new URL(String(value || '')).hostname.replace(/^www\./, ''));
@@ -1472,6 +2038,10 @@ async function getSiteSecuritySummary() {
 
   for (const p of session.vaultData.passwords || []) {
     const row = ensureSite(normalizeServiceName(p.domain || toDomain(p.url)));
+    row.credentials += 1;
+  }
+  for (const p of session.vaultData.passkeys || []) {
+    const row = ensureSite(normalizeServiceName(p.serviceName || 'unknown'));
     row.credentials += 1;
   }
 
@@ -1600,6 +2170,14 @@ async function ingestSecurityEvent(event) {
 
   addSecurityEvent(event.type, `Page event: ${event.type}`, event);
   if (event.type === 'webauthn_get' || event.type === 'webauthn_create') {
+    if (event.type === 'webauthn_create' && event.credentialId) {
+      await savePasskey({
+        serviceName: event.service || toDomain(event.url || ''),
+        userIdentifier: event.userIdentifier || 'passkey-user',
+        credentialId: event.credentialId,
+        source: event.source || 'webauthn',
+      });
+    }
     await addRiskEvent('webauthn_activity', {
       origin: event.origin || event.url || 'unknown',
       type: event.type,
@@ -1634,6 +2212,46 @@ async function openVaultTab() {
   return { success: true };
 }
 
+async function resetVault() {
+  // Clear runtime state first so no stale key/data remains in memory.
+  clearSession(true);
+  try {
+    await chrome.storage.local.clear();
+  } catch {
+    // Ignore local clear failures and continue sync clear.
+  }
+  try {
+    if (chrome.storage?.sync) {
+      await chrome.storage.sync.clear();
+    }
+  } catch {
+    // Ignore sync clear failures.
+  }
+  await clearDemoUnlockPin();
+  return { success: true, message: 'Vault reset completed' };
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port || (port.name !== 'vault_view' && port.name !== 'popup_view')) return;
+  if (session.viewHandoffTimer) {
+    clearTimeout(session.viewHandoffTimer);
+    session.viewHandoffTimer = null;
+  }
+  session.openViewCount = Number(session.openViewCount || 0) + 1;
+  port.onDisconnect.addListener(() => {
+    session.openViewCount = Math.max(0, Number(session.openViewCount || 0) - 1);
+    if (DEMO_DISABLE_LOCKING) return;
+    if (session.openViewCount === 0 && session.isUnlocked) {
+      // Give UI a short handoff window (popup -> vault/product tour tab).
+      session.viewHandoffTimer = setTimeout(() => {
+        if (session.openViewCount === 0 && session.isUnlocked) {
+          clearSession();
+        }
+      }, 3000);
+    }
+  });
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('CASPER extension installed');
 });
@@ -1641,13 +2259,33 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   (async () => {
     try {
+      if (
+        DEMO_DISABLE_LOCKING &&
+        !session.isUnlocked &&
+        request.type !== 'INITIALIZE_VAULT' &&
+        request.type !== 'UNLOCK_VAULT' &&
+        request.type !== 'VAULT_STATUS' &&
+        request.type !== 'RESET_VAULT'
+      ) {
+        await restoreDemoSessionIfNeeded();
+      }
       let response;
       switch (request.type) {
         case 'VAULT_STATUS':
           response = await getVaultStatus();
           break;
         case 'INITIALIZE_VAULT':
-          response = await initializeVault(request.pin, request.alertEmail || '');
+          response = await initializeVault(
+            request.pin,
+            request.alertEmail || '',
+            Array.isArray(request.recoveryQuestions) ? request.recoveryQuestions : []
+          );
+          break;
+        case 'GET_RECOVERY_QUESTIONS':
+          response = await getRecoveryQuestions();
+          break;
+        case 'UNLOCK_WITH_RECOVERY':
+          response = await unlockWithRecoveryAnswers(Array.isArray(request.answers) ? request.answers : []);
           break;
         case 'UNLOCK_VAULT':
           response = await unlockVault(request.pin);
@@ -1688,6 +2326,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'DELETE_OTP_ACCOUNT':
           response = await deleteOtpAccount(request.id);
           break;
+        case 'SAVE_PASSKEY':
+          response = await savePasskey(request.passkey || {});
+          break;
+        case 'GET_PASSKEYS':
+          response = await getPasskeys();
+          break;
+        case 'DELETE_PASSKEY':
+          response = await deletePasskey(request.id);
+          break;
         case 'GET_OTP_CODES':
           response = await getOtpCodes();
           break;
@@ -1697,6 +2344,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'INCREMENT_HOTP':
           response = await incrementHotp(request.id);
           break;
+        case 'ADD_NOTE':
+          response = await addNote(request.note || {});
+          break;
+        case 'GET_NOTES':
+          response = await getNotes();
+          break;
+        case 'UPDATE_NOTE':
+          response = await updateNote(request.id, request.updates || {});
+          break;
+        case 'DELETE_NOTE':
+          response = await deleteNote(request.id);
+          break;
         case 'UPDATE_SETTINGS':
           response = await updateSettings(request.settings || {});
           break;
@@ -1705,6 +2364,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'VERIFY_PIN':
           response = await verifySensitivePin(request.pin, request.reason || 'verify_pin');
+          break;
+        case 'CHANGE_PIN':
+          response = await changePin(request.oldPin, request.newPin);
           break;
         case 'SEND_TEST_EMAIL':
           response = await sendTestEmail(request || {});
@@ -1743,6 +2405,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case 'GET_DECOY_CREDENTIALS_DEV':
           response = await getDecoyCredentialsDev();
           break;
+        case 'GET_DECOY_SITES_DEV':
+          response = await getDecoySitesDev(request.pin, request.kind || 'password');
+          break;
+        case 'GET_DECOY_CREDENTIALS_DEV_FOR_SITE':
+          response = await getDecoyCredentialsDevForSite(
+            request.pin,
+            request.serviceName,
+            request.kind || 'password',
+            request.limit || 10
+          );
+          break;
+        case 'SET_TOUR_ACTIVE':
+          response = setTourActive(request.active);
+          break;
         case 'GET_SITE_SECURITY_SUMMARY':
           response = await getSiteSecuritySummary();
           break;
@@ -1754,6 +2430,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           break;
         case 'OPEN_VAULT':
           response = await openVaultTab();
+          break;
+        case 'RESET_VAULT':
+          response = await resetVault();
           break;
         case 'LOGIN_FORMS_DETECTED':
           response = { success: true };
