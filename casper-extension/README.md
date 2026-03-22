@@ -1,6 +1,6 @@
-# CASPER Browser Extension
+# DetectVault Browser Extension
 
-CASPER is a browser extension that combines a secure password vault, OTP authenticator, and deception-based breach detection.
+DetectVault is a browser extension that combines a secure password vault, OTP authenticator, and deception-based breach detection.
 
 ## Documentation Index
 - User Guide: [/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md](/Users/mohan/casper_web_extension/casper-extension/USER_GUIDE.md)
@@ -11,7 +11,7 @@ CASPER is a browser extension that combines a secure password vault, OTP authent
 - Dummy Fitness Site Demo: [/Users/mohan/casper_web_extension/dummy-site/README.md](/Users/mohan/casper_web_extension/dummy-site/README.md)
 
 ## Current Feature Set
-- Encrypted vault with CASPER secret-selection and derived key encryption
+- Encrypted vault with DetectVault secret-selection and derived key encryption
 - Password save/update/autofill flows
 - OTP authenticator support (TOTP/HOTP)
 - OTP verify action with grace-window policy
@@ -28,7 +28,7 @@ CASPER is a browser extension that combines a secure password vault, OTP authent
 
 ## Important Scope Note
 - Direct detection from third-party production backends (for example Instagram servers) is out of scope for extension-only architecture.
-- CASPER demonstrates controlled deception monitoring through honey/dummy endpoints where telemetry is available.
+- DetectVault demonstrates controlled deception monitoring through honey/dummy endpoints where telemetry is available.
 
 ## Quick Start
 1. Load extension unpacked from `/Users/mohan/casper_web_extension/casper-extension`.

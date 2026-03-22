@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CASPER Password Manager & Authenticator",
+  "name": "DetectVault Password Manager & Authenticator",
   "version": "2.0.2",
-  "description": "CASPER-based password vault with TOTP/HOTP authenticator, autofill, and breach detection hooks",
+  "description": "DetectVault-based password vault with TOTP/HOTP authenticator, autofill, and breach detection hooks",
   "permissions": [
     "storage",
     "activeTab",

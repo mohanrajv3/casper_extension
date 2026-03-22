@@ -412,7 +412,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   ensureStore();
-  console.log(`CASPER Dummy Site listening at http://${HOST}:${PORT}`);
+  console.log(`DetectVault Dummy Site listening at http://${HOST}:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
   if (API_TOKEN) console.log('Protected APIs require bearer token');
 });

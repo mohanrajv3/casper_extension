@@ -1,4 +1,4 @@
-# Install CASPER Extension
+# Install DetectVault Extension
 
 ## 1) Load extension (Chrome/Edge)
 1. Open `chrome://extensions` or `edge://extensions`.
@@ -25,7 +25,7 @@ node server.js
 ```
 Use URL: `http://127.0.0.1:8790`
 
-## 4) Configure CASPER settings
+## 4) Configure DetectVault settings
 In Vault -> Settings:
 1. Enable honeytoken monitoring.
 2. Set `Honey Server URL`.

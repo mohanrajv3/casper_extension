@@ -1,9 +1,9 @@
-# CASPER Technical Status and Implementation Notes
+# DetectVault Technical Status and Implementation Notes
 
 Date: 2026-03-08
 
 ## 1) Current project definition
-CASPER is a browser extension that combines:
+DetectVault is a browser extension that combines:
 1. Password vault
 2. OTP authenticator
 3. Deception-based breach detection

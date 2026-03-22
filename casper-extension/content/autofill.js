@@ -1,4 +1,4 @@
-class CasperAutofill {
+class DetectVaultAutofill {
   constructor() {
     this.forms = [];
     this.cachedSettings = null;
@@ -102,7 +102,7 @@ class CasperAutofill {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'casper-autofill-btn';
-    btn.textContent = 'Fill with CASPER';
+    btn.textContent = 'Fill with DetectVault';
     btn.style.cssText = [
       'margin-top:8px',
       'padding:6px 10px',
@@ -161,7 +161,7 @@ class CasperAutofill {
 
       const current = await this.sendMessage({ type: 'GET_PASSWORDS', url: window.location.href });
       if (current?.requiresUnlock) {
-        this.notify('Unlock CASPER to save this password', 'warn');
+        this.notify('Unlock DetectVault to save this password', 'warn');
         return;
       }
       const existing = current?.success
@@ -193,7 +193,7 @@ class CasperAutofill {
         this.notify(saveResult?.message || 'Could not save credentials', 'err');
         return;
       }
-      this.notify(existing ? 'Password updated in CASPER' : 'Password saved to CASPER', 'ok');
+      this.notify(existing ? 'Password updated in DetectVault' : 'Password saved to DetectVault', 'ok');
       this.lastPromptSignature = `${window.location.hostname}|${username}|${password}`;
       this.lastPromptAt = Date.now();
     } catch (error) {
@@ -266,7 +266,7 @@ class CasperAutofill {
 
     const existingResult = await this.sendMessage({ type: 'GET_PASSKEYS' });
     if (existingResult?.requiresUnlock) {
-      this.notify('Unlock CASPER to save this passkey', 'warn');
+      this.notify('Unlock DetectVault to save this passkey', 'warn');
       return;
     }
     const existing = (existingResult?.success ? existingResult.data : []).find(
@@ -295,7 +295,7 @@ class CasperAutofill {
       this.notify(saved?.message || 'Could not save passkey', 'err');
       return;
     }
-    this.notify(existing ? 'Passkey updated in CASPER' : 'Passkey saved to CASPER', 'ok');
+    this.notify(existing ? 'Passkey updated in DetectVault' : 'Passkey saved to DetectVault', 'ok');
   }
 
   shouldPrompt(username, password) {
@@ -411,4 +411,4 @@ class CasperAutofill {
   }
 }
 
-new CasperAutofill();
+new DetectVaultAutofill();

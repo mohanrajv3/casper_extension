@@ -1,18 +1,18 @@
-# CASPER Final Review Demo Script (With Speaking Content)
+# DetectVault Final Review Demo Script (With Speaking Content)
 
 ## 1) Opening (30 sec)
 Speak:
-"Good morning. Our project is CASPER: a browser extension that combines a password vault, OTP authenticator, and deception-based breach detection. The unique part is that we do not only store credentials securely, we also generate detectable signals when decoy data is misused."
+"Good morning. Our project is DetectVault: a browser extension that combines a password vault, OTP authenticator, and deception-based breach detection. The unique part is that we do not only store credentials securely, we also generate detectable signals when decoy data is misused."
 
 ## 2) Problem framing (30 sec)
 Speak:
-"Traditional vaults protect secrets but may not provide clear evidence when leaked data is probed. CASPER adds monitored decoys and alert telemetry to detect suspicious activity in a controlled auth environment."
+"Traditional vaults protect secrets but may not provide clear evidence when leaked data is probed. DetectVault adds monitored decoys and alert telemetry to detect suspicious activity in a controlled auth environment."
 
 ## 3) Architecture slide explanation (45 sec)
 Speak:
 "We have three layers:
 1. Extension for vault, OTP, and UI.
-2. CASPER decoy logic in background service worker.
+2. DetectVault decoy logic in background service worker.
 3. Controlled backend (dummy fitness website) that records decoy and wrong-password events."
 
 ## 4) Demo flow (show + speak)
@@ -24,13 +24,13 @@ Action:
 3. Show recovery codes.
 
 Speak:
-"During setup, CASPER initializes encrypted vault state and generates recovery codes for incident handling."
+"During setup, DetectVault initializes encrypted vault state and generates recovery codes for incident handling."
 
 ### Demo B: Register page + save prompt
 Action:
 1. Open `http://127.0.0.1:8790/register`.
 2. Create account.
-3. Confirm CASPER save prompt.
+3. Confirm DetectVault save prompt.
 
 Speak:
 "We intentionally prompt save only after successful auth actions on the demo site."
@@ -38,7 +38,7 @@ Speak:
 ### Demo C: Login and autofill
 Action:
 1. Go to `/login`.
-2. Use `Fill with CASPER`.
+2. Use `Fill with DetectVault`.
 3. Sign in and show dashboard.
 
 Speak:
@@ -61,7 +61,7 @@ Action:
 4. Open `View Breach Details`.
 
 Speak:
-"This is the main CASPER signal: decoy usage creates measurable breach evidence with timestamp, service, and source metadata."
+"This is the main DetectVault signal: decoy usage creates measurable breach evidence with timestamp, service, and source metadata."
 
 ### Demo F: OTP authenticator
 Action:
@@ -69,7 +69,7 @@ Action:
 2. Show rotating code and verify using `✅`.
 
 Speak:
-"CASPER also functions as an authenticator with policy controls for OTP period and grace windows."
+"DetectVault also functions as an authenticator with policy controls for OTP period and grace windows."
 
 ### Demo G: Lockout controls
 Action:
@@ -90,6 +90,16 @@ Speak:
 Speak:
 "Detection on third-party production backends like Instagram is outside extension-only scope. Our claim is controlled real-time detection on monitored endpoints, which is fully demonstrated here."
 
-## 6) Closing (20 sec)
+## 6) Comparison answers (from likely reviewer questions)
+
+### Q1: "How is your OTP + passkey unification different from 1Password?"
 Speak:
-"CASPER delivers a practical authenticator-plus-vault with deception-enhanced security telemetry. The project demonstrates secure storage, usable MFA, attack signal generation, and actionable incident response in one integrated extension."
+"1Password is a production-grade commercial platform with broader ecosystem maturity. Our DetectVault focus is different: we unify password vault, OTP authenticator, passkey tracking, and deception telemetry in one academic-security workflow. The key differentiator is integration with breach-warning signals and response flow, not trying to replace 1Password’s enterprise product depth."
+
+### Q2: "How is your breach detection different from canary tokens?"
+Speak:
+"Canary tokens are general-purpose tripwires. DetectVault uses vault-linked decoys tied to specific credential and passkey contexts, then maps events directly into site-level risk summaries and user response actions inside the extension. So canary tokens are broad standalone decoys, while DetectVault is vault-native deception monitoring."
+
+## 7) Closing (20 sec)
+Speak:
+"DetectVault delivers a practical authenticator-plus-vault with deception-enhanced security telemetry. The project demonstrates secure storage, usable MFA, attack signal generation, and actionable incident response in one integrated extension."

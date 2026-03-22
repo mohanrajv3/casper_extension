@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CASPER Security Response Guidelines</title>
+  <title>DetectVault Security Response Guidelines</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -57,13 +57,13 @@
 </head>
 <body>
   <main>
-    <h1>CASPER Security Response Guidelines</h1>
-    <p class="critical">Use this playbook when CASPER reports breach alerts or wrong-password probing activity.</p>
+    <h1>DetectVault Security Response Guidelines</h1>
+    <p class="critical">Use this playbook when DetectVault reports breach alerts or wrong-password probing activity.</p>
 
     <section class="card">
       <h2>Immediate Actions (First 5 Minutes)</h2>
       <ol>
-        <li>Lock the vault from CASPER UI.</li>
+        <li>Lock the vault from DetectVault UI.</li>
         <li>Open Security tab and review <code>View Breach Details</code>.</li>
         <li>Note service, time, source IP, and affected username.</li>
         <li>If alerts are unexpected, stop using suspicious devices/sessions.</li>
@@ -76,14 +76,14 @@
         <li>Change password for affected service immediately.</li>
         <li>Enable/confirm MFA on affected service account.</li>
         <li>Rotate similar/reused passwords across other services.</li>
-        <li>Regenerate CASPER recovery codes and store securely offline.</li>
+        <li>Regenerate DetectVault recovery codes and store securely offline.</li>
       </ol>
     </section>
 
     <section class="card">
-      <h2>CASPER-Specific Recovery</h2>
+      <h2>DetectVault-Specific Recovery</h2>
       <ol>
-        <li>In CASPER Settings, verify Honey Server URL and token are valid.</li>
+        <li>In DetectVault Settings, verify Honey Server URL and token are valid.</li>
         <li>Regenerate credentials if needed and confirm decoys are monitored.</li>
         <li>Run <code>Check Breach Now</code> to confirm no new active events.</li>
         <li>Use <code>Show Decoys (Dev)</code> only for controlled demos/testing.</li>

@@ -85,10 +85,46 @@
       "password_hash": "ed02457b5c41d964dbd2f2a609d63fe1bb7528dbe55e1abf5b52c249cd735797",
       "service_name": "dummy-auth.local",
       "created_at": 1773073575634
+    },
+    {
+      "id": "e1c27044cc2aa3a4",
+      "username": "adi",
+      "password_hash": "14f8f4bb8c0e79a02670a5fea5682da717a5b3d3dc7b1706f7a4bab9afae18c2",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773978615324
+    },
+    {
+      "id": "d276018ca8a4d7f9",
+      "username": "dummy",
+      "password_hash": "342a59f63384c1fbd5b0f244484959edf694930c8bd84ccc9ee8f68c945e04dc",
+      "service_name": "dummy-auth.local",
+      "created_at": 1773979216316
     }
   ],
   "decoys": [],
   "alerts": [
+    {
+      "id": "76f455bacf34ac18",
+      "timestamp": 1773979491875,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "dummy",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
+    {
+      "id": "4b22d2672401f9ea",
+      "timestamp": 1773979482729,
+      "event_type": "wrong_password",
+      "severity": "LOW",
+      "user_id": "unknown",
+      "decoy_id": "",
+      "username": "dummy",
+      "service_name": "dummy-auth.local",
+      "ip_address": "127.0.0.1"
+    },
     {
       "id": "560175e642f02a3b",
       "timestamp": 1773071871859,

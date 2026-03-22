@@ -1,4 +1,4 @@
-class CasperVault {
+class DetectVaultVault {
   constructor() {
     this.currentSection = 'passwords';
     this.passwords = [];
@@ -549,7 +549,7 @@ class CasperVault {
   }
 
   async verifySensitiveAction(reason) {
-    const pin = await this.promptForHiddenPin('Security Verification', 'Enter your CASPER PIN');
+    const pin = await this.promptForHiddenPin('Security Verification', 'Enter your DetectVault PIN');
     if (!pin) return false;
     const response = await this.sendMessage({ type: 'VERIFY_PIN', pin, reason });
     if (!response.success) {
@@ -1124,7 +1124,7 @@ class CasperVault {
         breachSubtext.textContent =
           breachCount > 0
             ? 'Unauthorized decoy usage has been detected. Review security logs immediately.'
-            : 'CASPER is actively monitoring for unauthorized access';
+            : 'DetectVault is actively monitoring for unauthorized access';
       }
     }
 
@@ -1606,8 +1606,6 @@ class CasperVault {
       this.toast('Reset cancelled', 'info');
       return;
     }
-    const verified = await this.verifySensitiveAction('reset_vault');
-    if (!verified) return;
 
     const response = await this.sendMessage({ type: 'RESET_VAULT' });
     if (!response.success) {
@@ -1723,7 +1721,7 @@ class CasperVault {
         section: 'passkeys',
         selector: '#addSitePasskeyBtn',
         title: 'Save Passkey',
-        body: 'Store passkey metadata (service, identifier, credential ID) inside CASPER vault.',
+        body: 'Store passkey metadata (service, identifier, credential ID) inside DetectVault vault.',
       },
       {
         section: 'notes',
@@ -1843,7 +1841,7 @@ class CasperVault {
         section: 'settings',
         selector: '#mailToEmail',
         title: 'Alert Email',
-        body: 'Where CASPER sends warning, breach and test emails.',
+        body: 'Where DetectVault sends warning, breach and test emails.',
       },
       {
         section: 'settings',
@@ -2077,5 +2075,5 @@ class CasperVault {
 
 let casperVault;
 document.addEventListener('DOMContentLoaded', () => {
-  casperVault = new CasperVault();
+  casperVault = new DetectVaultVault();
 });

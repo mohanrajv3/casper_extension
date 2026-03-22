@@ -604,7 +604,7 @@ async function sendBreachEmailIfConfigured(event, cloudData) {
     const result = await sendEmailWithEmailJs(EMAILJS_CONFIG.breachTemplateId, {
       to_email: settings.toEmail || '',
       to_name: nameFromEmail(settings.toEmail),
-      subject: 'CASPER Security Alert: Breach Detection Triggered',
+      subject: 'DetectVault Security Alert: Breach Detection Triggered',
       from_email: EMAILJS_CONFIG.senderEmail,
       breach_time: new Date(event.timestamp).toISOString(),
       breach_account: event.details?.credentialId || 'Unknown account',
@@ -612,7 +612,7 @@ async function sendBreachEmailIfConfigured(event, cloudData) {
       breach_reason: event.message,
       partial_password: 'N/A',
       immediate_actions:
-        '1) Lock vault immediately\\n2) Rotate critical passwords\\n3) Review recent logins\\n4) Recreate CASPER vault if compromise suspected',
+        '1) Lock vault immediately\\n2) Rotate critical passwords\\n3) Review recent logins\\n4) Recreate DetectVault vault if compromise suspected',
       timestamp: new Date().toISOString(),
       breach_details: JSON.stringify(event.details || {}),
     });
@@ -675,13 +675,13 @@ async function sendWelcomeEmailIfConfigured(toEmail) {
     const result = await sendEmailWithEmailJs(EMAILJS_CONFIG.welcomeTemplateId, {
       to_email: toEmail,
       to_name: nameFromEmail(toEmail),
-      subject: 'Welcome to CASPER Password Manager',
+      subject: 'Welcome to DetectVault Password Manager',
       from_email: EMAILJS_CONFIG.senderEmail,
       vault_features:
         '• Encrypted password vault\\n• Authenticator (TOTP/HOTP)\\n• Auto-fill support\\n• Breach detection alerts',
       security_note: 'Keep your PIN safe. Never share it with anyone.',
       timestamp: new Date().toISOString(),
-      message: 'Welcome to CASPER Password Manager & Authenticator.',
+      message: 'Welcome to DetectVault Password Manager & Authenticator.',
     });
     if (!result.ok) {
       throw new Error(`Welcome email failed (${result.status}): ${typeof result.body === 'string' ? result.body : JSON.stringify(result.body)}`);
@@ -1638,20 +1638,20 @@ async function sendTestEmail(payload = {}) {
     const result = await sendEmailWithEmailJs(EMAILJS_CONFIG.welcomeTemplateId, {
       to_email: mail.toEmail,
       to_name: nameFromEmail(mail.toEmail),
-      subject: 'CASPER Email Test',
+      subject: 'DetectVault Email Test',
       from_email: EMAILJS_CONFIG.senderEmail,
-      vault_features: 'Test message from CASPER settings',
+      vault_features: 'Test message from DetectVault settings',
       security_note: 'No action required',
       timestamp: new Date().toISOString(),
       welcome_time: new Date().toISOString(),
       breach_time: new Date().toISOString(),
-      breach_reason: 'CASPER test email',
+      breach_reason: 'DetectVault test email',
       breach_account: 'test-account',
       breach_website: 'extension://settings',
       partial_password: 'N/A',
       immediate_actions: 'This is only a test.',
       breach_details: 'Manual test from extension settings',
-      message: 'CASPER mail integration is working.',
+      message: 'DetectVault mail integration is working.',
     });
     if (!result.ok) {
       throw new Error(`EmailJS ${result.status}: ${typeof result.body === 'string' ? result.body : JSON.stringify(result.body)}`);
@@ -2253,7 +2253,7 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('CASPER extension installed');
+  console.log('DetectVault extension installed');
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

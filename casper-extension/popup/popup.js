@@ -1,9 +1,9 @@
 /**
- * CASPER Popup Interface
+ * DetectVault Popup Interface
  * Handles user interactions and vault management
  */
 
-class CasperPopup {
+class DetectVaultPopup {
   constructor() {
     this.currentScreen = 'loading';
     this.vaultStatus = null;
@@ -355,11 +355,11 @@ class CasperPopup {
       const cred = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: 'CASPER Vault' },
+          rp: { name: 'DetectVault Vault' },
           user: {
             id: userId,
             name: 'casper-user',
-            displayName: 'CASPER User',
+            displayName: 'DetectVault User',
           },
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
           timeout: 60000,
@@ -862,5 +862,5 @@ class CasperPopup {
 
 // Initialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  new CasperPopup();
+  new DetectVaultPopup();
 });

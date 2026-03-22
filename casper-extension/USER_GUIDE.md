@@ -1,6 +1,6 @@
-# CASPER User Guide (Latest)
+# DetectVault User Guide (Latest)
 
-## What CASPER provides
+## What DetectVault provides
 1. Password vault
 2. OTP authenticator (TOTP/HOTP)
 3. Autofill + save/update prompts
@@ -10,8 +10,8 @@
 
 ## Daily workflow
 1. Unlock vault with PIN.
-2. On login pages, use `Fill with CASPER`.
-3. On successful register/login (dummy site) CASPER prompts to save/update credentials.
+2. On login pages, use `Fill with DetectVault`.
+3. On successful register/login (dummy site) DetectVault prompts to save/update credentials.
 4. Manage passwords in Vault -> Passwords.
 5. Manage OTP accounts in Vault -> Passkeys.
 

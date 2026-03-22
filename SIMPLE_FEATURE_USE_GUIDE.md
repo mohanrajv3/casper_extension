@@ -1,4 +1,4 @@
-# CASPER Simple Feature Guide (Popup + Vault)
+# DetectVault Simple Feature Guide (Popup + Vault)
 
 This is a quick practical guide for demo use.
 
@@ -77,7 +77,7 @@ This is a quick practical guide for demo use.
 
 ## 8) Demo-safe truth for reviewers
 - Third-party backend detection (Instagram server internals) is out of scope.
-- CASPER detection claim is valid for monitored endpoints (dummy/honey server path).
+- DetectVault detection claim is valid for monitored endpoints (dummy/honey server path).
 - Wrong-password events and decoy events are surfaced in Security dashboard.
 
 ## 9) Quick smoke test sequence
